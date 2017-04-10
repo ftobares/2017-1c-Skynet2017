@@ -3,6 +3,15 @@
 #include <commons/config.h>
 #include <commons/string.h>
 #include <commons/collections/list.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <pthread.h> //for threading , link with pthread (como las commons)
+
+#define PUERTO "6667"		//este viene en el config????
+#define BACKLOG 5			// Define cuantas conexiones vamos a mantener pendientes al mismo tiempo
+#define PACKAGESIZE 1024	// Define cual va a ser el size maximo del paquete a enviar
 
 //Variables Globales
 t_config *config;
@@ -14,7 +23,8 @@ t_list* get_config_list_de_string_array(char* key); //Poner en UtilsLibray
 void imprimirSemIds(char* config_param);
 void imprimirSemInt(char* config_param);
 void imprimirSharedVars(char* config_param);
-
+void conectar();
+void *connection_handler(void *); //the thread function
 
 int main(int argc, char* argv) {
 
@@ -93,4 +103,73 @@ void cargarYMostrarConfiguracion(){
 	list_iterate(semIds,imprimirSemIds);
 	list_iterate(semIds,imprimirSemInt);
 	list_iterate(semIds,imprimirSharedVars);
+}
+
+void conectar(){
+	struct addrinfo hints;
+	struct addrinfo *serverInfo;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_socktype = SOCK_STREAM;
+
+	getaddrinfo(NULL, PUERTO, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
+
+	int listenningSocket;
+	listenningSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
+
+	bind(listenningSocket,serverInfo->ai_addr, serverInfo->ai_addrlen);
+	freeaddrinfo(serverInfo);
+
+	while(1){
+		listen(listenningSocket, BACKLOG);		// IMPORTANTE: listen() es una syscall BLOQUEANTE.
+
+		puts("Connection accepted --- Esperando conexiones?");
+
+		pthread_t sniffer_thread;
+
+		struct sockaddr_in addr;
+		socklen_t addrlen = sizeof(addr);
+
+		int socketCliente = accept(listenningSocket, (struct sockaddr *) &addr,
+				&addrlen);
+
+		int *new_sock = malloc(1);
+		*new_sock = socketCliente;
+
+		if (pthread_create(&sniffer_thread, NULL, connection_handler,
+				(void*) new_sock)) {
+			printf("No se creo el hilo");
+			perror("could not create thread");
+			return;
+		}
+
+		//Now join the thread , so that we dont terminate before the thread
+		pthread_join(sniffer_thread, NULL);
+		puts("Handler assigned");
+	}
+
+	close(listenningSocket);
+}
+
+void *connection_handler(void *socketCliente)
+{
+	printf("Se creo el hilo");
+	int sock = *(int*)socketCliente;
+
+	printf("Cliente conectado.\n");
+
+	int enviar = 1;
+	char message[PACKAGESIZE];
+
+	printf("Conectado al servidor. Bienvenido al sistema, ya puede enviar mensajes. Escriba 'exit' para salir\n");
+
+	while(enviar){
+		fgets(message, PACKAGESIZE, stdin);			// Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
+		if (!strcmp(message,"exit\n")) enviar = 0;			// Chequeo que el usuario no quiera salir
+		if (enviar) send(sock, message, strlen(message) + 1, 0); 	// Solo envio si el usuario no quiere salir.
+	}
+
+	close(sock);
 }
