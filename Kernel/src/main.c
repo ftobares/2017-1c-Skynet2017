@@ -9,12 +9,12 @@
 #include <unistd.h>
 #include <pthread.h> //for threading , link with pthread (como las commons)
 
-#define PUERTO "6667"		//este viene en el config????
-#define BACKLOG 5			// Define cuantas conexiones vamos a mantener pendientes al mismo tiempo
+#define BACKLOG 5			// !!!! Define cuantas conexiones vamos a mantener pendientes al mismo tiempo
 #define PACKAGESIZE 1024	// Define cual va a ser el size maximo del paquete a enviar
 
 //Variables Globales
 t_config *config;
+char * puertoProg;
 
 //Declaracion de funciones
 void cargarYMostrarConfiguracion();
@@ -29,6 +29,7 @@ void *connection_handler(void *); //the thread function
 int main(int argc, char* argv) {
 
 	cargarYMostrarConfiguracion();
+	conectar();
 	return 0;
 }
 
@@ -73,7 +74,7 @@ void cargarYMostrarConfiguracion(){
 		free(config); //Libero la memoria de config
 	}
 
-	int puertoProg = config_get_int_value(config,"PUERTO_PROG");
+	puertoProg = config_get_string_value(config,"PUERTO_PROG");
 	int puertoCPU = config_get_int_value(config,"PUERTO_CPU");
 	char* ipMemoria = config_get_string_value(config,"IP_MEMORIA");
 	int puertoMemoria = config_get_int_value(config,"PUERTO_MEMORIA");
@@ -114,7 +115,7 @@ void conectar(){
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 
-	getaddrinfo(NULL, PUERTO, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
+	getaddrinfo(NULL, puertoProg, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
 
 	int listenningSocket;
 	listenningSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);

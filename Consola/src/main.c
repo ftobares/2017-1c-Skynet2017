@@ -17,12 +17,12 @@ char* puertoKernel;
 //Declaracion de funciones
 void cargarYMostrarConfiguracion();
 bool validar_configuracion(t_config* config); //Poner en UtilsLibray
-//void conectarAlKernel();
+void conectarAlKernel();
 
 int main(int argc, char* argv) {
 
 	cargarYMostrarConfiguracion();
-	//conectarAlKernel();
+	conectarAlKernel();
 
 
 	return 0;
