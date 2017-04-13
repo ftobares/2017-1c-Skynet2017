@@ -1,115 +1,66 @@
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/time.h>
+#include <string.h> // strlen
+#include <stdlib.h> // strlen
 #include <sys/socket.h>
-#include <netdb.h>
+#include <arpa/inet.h> //inet_addr
 #include <unistd.h>
-#include <pthread.h> //for threading , link with lpthread
+#include <pthread.h>
 
-#define PUERTO "6667"
-#define BACKLOG 5            // Define cuantas conexiones vamos a mantener pendientes al mismo tiempo
-#define PACKAGESIZE 1024    // Define cual va a ser el size maximo del paquete a enviar
-#define TRUE   1
-
-//the thread function
+#define PACKAGESIZE 1024
+#define BACKLOG 3
 void *connection_handler(void *);
+int main(int argc, char *argv[]) {
+	int socket_desc, cliente_socket, c;
+	struct sockaddr_in server, client;
+// Create socket
+	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+	if (socket_desc == -1) {
+		printf("Could not create socket");
+	}
+	puts("Socket creado");
+// Prepare the sockaddr_in structure
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(6667);
+// Bind
+	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+// print the error message
+		perror("bind failed. Error");
+		return 1;
+	}
+	puts("bind done");
 
-int main(){
+	listen(socket_desc, BACKLOG);
 
-
-    struct addrinfo hints;
-    struct addrinfo *serverInfo;
-    fd_set read_fds; // conjunto temporal de descriptores de fichero para select()
-    int fdmax;       // número máximo de descriptores de fichero
-    int actividad;
-    int opt = TRUE;
-
-
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;        // No importa si uso IPv4 o IPv6
-    hints.ai_flags = AI_PASSIVE;        // Asigna el address del localhost: 127.0.0.1
-    hints.ai_socktype = SOCK_STREAM;    // Indica que usaremos el protocolo TCP
-
-    getaddrinfo(NULL, PUERTO, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
-
-    /* Necesitamos un socket que escuche las conecciones entrantes */
-    int listenningSocket;
-    listenningSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
-
-    setsockopt(listenningSocket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt));
-
-    bind(listenningSocket,serverInfo->ai_addr, serverInfo->ai_addrlen);
-    freeaddrinfo(serverInfo); // Ya no lo vamos a necesitar
-
-    /*
-     *     Ya tengo un medio de comunicacion (el socket) y le dije por que "telefono" tiene que esperar las llamadas.
-     *
-     *     Solo me queda decirle que vaya y escuche!
-     *
-     */
-    while(1){
-			listen(listenningSocket, BACKLOG);        // IMPORTANTE: listen() es una syscall BLOQUEANTE.
-
-			puts("Server activo");
-
-		    FD_ZERO(&read_fds);
-			FD_SET(listenningSocket, &read_fds);
-			fdmax = listenningSocket;
-			actividad = select( fdmax + 1 , &read_fds , NULL , NULL , NULL);
-
-			if (actividad < 0)
-			{
-				printf("select error");
-			}
-
-			if (FD_ISSET(listenningSocket, &read_fds))
-			{
-
-    		pthread_t sniffer_thread;
-            struct sockaddr_in addr;            // Esta estructura contendra los datos de la conexion del cliente. IP, puerto, etc.
-            socklen_t addrlen = sizeof(addr);
-
-
-            int socketCliente = accept(listenningSocket, (struct sockaddr *) &addr, &addrlen);
-
-                int *new_sock = malloc(1);
-                *new_sock = socketCliente;
-
-
-            if( pthread_create( &sniffer_thread , NULL ,  connection_handler , (void*) new_sock))
-            {
-            	puts("No se creo el hilo");
-                perror("could not create thread");
-                return 1;
-            }
-
-            //Now join the thread , so that we dont terminate before the thread
-            pthread_join( sniffer_thread , NULL);
-            //puts("Server activo");
-			}
-    }
-
-    close(listenningSocket);
-
-    return 0;
+	puts("Esperando por conexiones entrantes...");
+	c = sizeof(struct sockaddr_in);
+	pthread_t thread_id;
+	while ((cliente_socket = accept(socket_desc, (struct sockaddr *) &client, (socklen_t*) &c))) {
+		printf("Conexion aceptada, cliente: %d\n", cliente_socket);
+		if (pthread_create(&thread_id, NULL, connection_handler, (void*) &cliente_socket) < 0) {
+			perror("could not create thread");
+			return 1;
+		}
+		puts("Handler assigned");
+	}
+	if (cliente_socket < 0) {
+		perror("accept failed");
+		return 1;
+	}
+	return 0;
 }
 
-void *connection_handler(void *socketCliente)
-{
-//puts("Se creo el hilo");
-    int sock = *(int*)socketCliente;
+void *connection_handler(void *socket_cliente) {
 
-    char package[PACKAGESIZE];
-    int  status = 1;
-
-    puts("Cliente conectado. Esperando mensajes:\n");
-
-    while(status){
-	//fgets(package, PACKAGESIZE, stdin); //forma segura
-	send(sock, package, strlen(package) + 1, 0);
+	int sock = *(int*) socket_cliente;
+	int read_size;
+	char cliente_mensaje[PACKAGESIZE];
+	while ((read_size = recv(sock, cliente_mensaje, PACKAGESIZE, 0)) > 0)
+	{
+		cliente_mensaje[read_size] = '\0';
+		fputs(cliente_mensaje,stdout);
+		memset(cliente_mensaje, 0, PACKAGESIZE);
 	}
-
-    close(sock);
+	fflush(stdout);
+	return 0;
 }
