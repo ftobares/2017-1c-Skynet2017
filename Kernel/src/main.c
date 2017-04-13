@@ -133,7 +133,7 @@ int conectar_otro_server(char* ip, char* puerto) {
 	connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen);
 	freeaddrinfo(serverInfo); // No lo necesitamos mas
 
-	printf("Conectado a la ip=%s puerto=%s ya se pueden enviar mensajes/n", ip,
+	printf("Conectado a la ip=%s puerto=%s ya se pueden enviar mensajes\n", ip,
 			puerto);
 	return serverSocket;
 }
@@ -185,7 +185,16 @@ int iniciar_servidor() {
 		return 1;
 	}
 
-	return pthread_join(thread_id, NULL);
+	if(pthread_join(thread_id, NULL) == 0){
+		close(cliente_socket);
+		close(socket_desc);
+		close(socket_memoria);
+		close(socket_fs);
+		return 0;
+	}else{
+		perror("Error en Thread");
+		return 1;
+	}
 }
 
 void *connection_handler(void *socket_cliente) {
@@ -196,10 +205,10 @@ void *connection_handler(void *socket_cliente) {
 	while ((read_size = recv(sock, cliente_mensaje, PACKAGESIZE, 0)) > 0) {
 		cliente_mensaje[read_size] = '\0';
 		fputs(cliente_mensaje, stdout);
-		memset(cliente_mensaje, 0, PACKAGESIZE);
 		//Reenvio el mensaje a Memoria y FileSystem
 		send(socket_memoria, cliente_mensaje, strlen(cliente_mensaje) + 1, 0);
 		send(socket_fs, cliente_mensaje, strlen(cliente_mensaje) + 1, 0);
+		memset(cliente_mensaje, 0, PACKAGESIZE);
 	}
 	fflush(stdout);
 	return 0;
