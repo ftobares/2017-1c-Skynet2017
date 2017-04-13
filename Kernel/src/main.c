@@ -7,60 +7,73 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <pthread.h> //for threading , link with pthread (como las commons)
+#include <pthread.h> //Agregar a C/C++ Build > GCC C Linker > Libraries > pthread (como las commons)
+#include <string.h> // strlen
+#include <arpa/inet.h> //inet_addr
 
-#define BACKLOG 5			// !!!! Define cuantas conexiones vamos a mantener pendientes al mismo tiempo
-#define PACKAGESIZE 1024	// Define cual va a ser el size maximo del paquete a enviar
+#define BACKLOG 3			// Cantidad conexiones maximas
+#define PACKAGESIZE 1024	// Size maximo del paquete a enviar
 
 //Variables Globales
 t_config *config;
-char * puertoProg;
+int puertoProg;
+int puertoCPU;
+char* ipMemoria;
+char* puertoMemoria;
+char* ipFileSystem;
+char* puertoFileSystem;
+int socket_memoria;
+int socket_fs;
 
 //Declaracion de funciones
-void cargarYMostrarConfiguracion();
+void cargar_y_mostrar_configuracion();
 bool validar_configuracion(t_config* config); //Poner en UtilsLibray
 t_list* get_config_list_de_string_array(char* key); //Poner en UtilsLibray
 void imprimirSemIds(char* config_param);
 void imprimirSemInt(char* config_param);
 void imprimirSharedVars(char* config_param);
-void conectar();
-void *connection_handler(void *); //the thread function
+int conectar_otro_server(char* ip, char* puerto);
+
+void *connection_handler(void *);
+int iniciar_servidor();
 
 int main(int argc, char* argv) {
 
-	cargarYMostrarConfiguracion();
-	conectar();
-	return 0;
+	cargar_y_mostrar_configuracion();
+
+	int v_valor_retorno = iniciar_servidor();
+
+	return v_valor_retorno;
 }
 
-bool validar_configuracion(t_config* config){
+bool validar_configuracion(t_config* config) {
 	return (config_keys_amount(config) > 0);
 }
 
-t_list* get_config_list_de_string_array(char* key){
+t_list* get_config_list_de_string_array(char* key) {
 	t_list* list = list_create();
-	char** array = config_get_array_value(config,key);
+	char** array = config_get_array_value(config, key);
 	int i = 0;
-	while(array[i]!=NULL){
-		list_add(list,array[i]);
+	while (array[i] != NULL) {
+		list_add(list, array[i]);
 		i++;
 	}
 	return list;
 }
 
-void imprimirSemIds(char* config_param){
-	printf("SEM_IDS es %s \n",config_param);
+void imprimirSemIds(char* config_param) {
+	printf("SEM_IDS es %s \n", config_param);
 }
 
-void imprimirSemInt(char* config_param){
-	printf("SEM_INIT es %s \n",config_param);
+void imprimirSemInt(char* config_param) {
+	printf("SEM_INIT es %s \n", config_param);
 }
 
-void imprimirSharedVars(char* config_param){
-	printf("SHARED_VARS es %s \n",config_param);
+void imprimirSharedVars(char* config_param) {
+	printf("SHARED_VARS es %s \n", config_param);
 }
 
-void cargarYMostrarConfiguracion(){
+void cargar_y_mostrar_configuracion() {
 
 	/** Leer archivo de configuracion */
 	char* configPath;
@@ -74,103 +87,191 @@ void cargarYMostrarConfiguracion(){
 		free(config); //Libero la memoria de config
 	}
 
-	puertoProg = config_get_string_value(config,"PUERTO_PROG");
-	int puertoCPU = config_get_int_value(config,"PUERTO_CPU");
-	char* ipMemoria = config_get_string_value(config,"IP_MEMORIA");
-	int puertoMemoria = config_get_int_value(config,"PUERTO_MEMORIA");
-	char* ipFileSystem = config_get_string_value(config,"IP_FS");
-	int puertoFileSystem = config_get_int_value(config,"PUERTO_FS");
-	int quantum = config_get_int_value(config,"QUANTUM");
-	int quantumSleep = config_get_int_value(config,"QUANTUM_SLEEP");
-	char* algoritmo = config_get_string_value(config,"ALGORITMO");
-	int gradoMultiprog = config_get_int_value(config,"GRADO_MULTIPROG");
-	char* semIds = get_config_list_de_string_array("SEM_IDS"); //config_get_array_value(config,"SEM_IDS");
-	char* semInit = get_config_list_de_string_array("SEM_INIT"); //config_get_array_value(config,"SEM_INIT");
-	char* sharedVars = get_config_list_de_string_array("SHARED_VARS"); //config_get_array_value(config,"SHARED_VARS");
-	char* stackSize = config_get_int_value(config,"STACK_SIZE");
+	puertoProg = config_get_int_value(config, "PUERTO_PROG");
+	puertoCPU = config_get_int_value(config, "PUERTO_CPU");
+	ipMemoria = config_get_string_value(config, "IP_MEMORIA");
+	puertoMemoria = config_get_string_value(config, "PUERTO_MEMORIA");
+	ipFileSystem = config_get_string_value(config, "IP_FS");
+	puertoFileSystem = config_get_string_value(config, "PUERTO_FS");
+	int quantum = config_get_int_value(config, "QUANTUM");
+	int quantumSleep = config_get_int_value(config, "QUANTUM_SLEEP");
+	char* algoritmo = config_get_string_value(config, "ALGORITMO");
+	int gradoMultiprog = config_get_int_value(config, "GRADO_MULTIPROG");
+	char* semIds = get_config_list_de_string_array("SEM_IDS");
+	char* semInit = get_config_list_de_string_array("SEM_INIT");
+	char* sharedVars = get_config_list_de_string_array("SHARED_VARS");
+	int stackSize = config_get_int_value(config, "STACK_SIZE");
 
 	printf("Imprimir archivo de configuración: \n");
-	printf("PUERTO_PROG es %d \n",puertoProg);
-	printf("PUERTO_CPU es %d \n",puertoCPU);
-	printf("IP_MEMORIA es %s \n",ipMemoria);
-	printf("PUERTO_MEMORIA es %d \n",puertoMemoria);
-	printf("IP_FS es %s \n",ipFileSystem);
-	printf("PUERTO_FS es %d \n",puertoFileSystem);
-	printf("QUANTUM es %d \n",quantum);
-	printf("QUANTUM_SLEEP es %d \n",quantumSleep);
-	printf("ALGORITMO es %s \n",algoritmo);
-	printf("GRADO_MULTIPROG es %d \n",gradoMultiprog);
-	printf("STACK_SIZE es %d \n",stackSize);
-	list_iterate(semIds,imprimirSemIds);
-	list_iterate(semIds,imprimirSemInt);
-	list_iterate(semIds,imprimirSharedVars);
+	printf("PUERTO_PROG es %d \n", puertoProg);
+	printf("PUERTO_CPU es %d \n", puertoCPU);
+	printf("IP_MEMORIA es %s \n", ipMemoria);
+	printf("PUERTO_MEMORIA es %s \n", puertoMemoria);
+	printf("IP_FS es %s \n", ipFileSystem);
+	printf("PUERTO_FS es %s \n", puertoFileSystem);
+	printf("QUANTUM es %d \n", quantum);
+	printf("QUANTUM_SLEEP es %d \n", quantumSleep);
+	printf("ALGORITMO es %s \n", algoritmo);
+	printf("GRADO_MULTIPROG es %d \n", gradoMultiprog);
+	printf("STACK_SIZE es %d \n", stackSize);
+//	list_iterate(semIds, imprimirSemIds);
+//	list_iterate(semIds, imprimirSemInt);
+//	list_iterate(semIds, imprimirSharedVars);
 }
 
-void conectar(){
+int conectar_otro_server(char* ip, char* puerto) {
 	struct addrinfo hints;
 	struct addrinfo *serverInfo;
-
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_flags = AI_PASSIVE;
-	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_family = AF_UNSPEC; // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
+	getaddrinfo(ip, puerto, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
+	int serverSocket;
+	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
+			serverInfo->ai_protocol);
 
-	getaddrinfo(NULL, puertoProg, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
+	connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen);
+	freeaddrinfo(serverInfo); // No lo necesitamos mas
 
-	int listenningSocket;
-	listenningSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
+	printf("Conectado a la ip=%s puerto=%s ya se pueden enviar mensajes/n", ip,
+			puerto);
+	return serverSocket;
+}
 
-	bind(listenningSocket,serverInfo->ai_addr, serverInfo->ai_addrlen);
-	freeaddrinfo(serverInfo);
+int iniciar_servidor() {
+	int socket_desc, cliente_socket, c;
+	struct sockaddr_in server, client;
+	// Create socket
+	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+	if (socket_desc == -1) {
+		printf("Could not create socket");
+	}
+	puts("Socket creado");
+	// Prepare the sockaddr_in structure
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(puertoProg);
+	// Bind
+	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+		// print the error message
+		perror("bind failed. Error");
+		return 1;
+	}
+	puts("bind done");
 
-	while(1){
-		listen(listenningSocket, BACKLOG);		// IMPORTANTE: listen() es una syscall BLOQUEANTE.
+	//Conectarse a la Memoria
+	socket_memoria = conectar_otro_server(ipMemoria, puertoMemoria);
 
-		puts("Connection accepted --- Esperando conexiones?");
+	//Conectarse al FileSystem
+	socket_fs = conectar_otro_server(ipFileSystem, puertoFileSystem);
 
-		pthread_t sniffer_thread;
+	listen(socket_desc, BACKLOG);
 
-		struct sockaddr_in addr;
-		socklen_t addrlen = sizeof(addr);
-
-		int socketCliente = accept(listenningSocket, (struct sockaddr *) &addr,
-				&addrlen);
-
-		int *new_sock = malloc(1);
-		*new_sock = socketCliente;
-
-		if (pthread_create(&sniffer_thread, NULL, connection_handler,
-				(void*) new_sock)) {
-			printf("No se creo el hilo");
+	puts("Esperando por conexiones entrantes...");
+	c = sizeof(struct sockaddr_in);
+	pthread_t thread_id;
+	while ((cliente_socket = accept(socket_desc, (struct sockaddr *) &client,
+			(socklen_t*) &c))) {
+		printf("Conexion aceptada, cliente: %d\n", cliente_socket);
+		if (pthread_create(&thread_id, NULL, connection_handler,
+				(void*) &cliente_socket) < 0) {
 			perror("could not create thread");
-			return;
+			return 1;
 		}
-
-		//Now join the thread , so that we dont terminate before the thread
-		pthread_join(sniffer_thread, NULL);
 		puts("Handler assigned");
 	}
-
-	close(listenningSocket);
-}
-
-void *connection_handler(void *socketCliente)
-{
-	printf("Se creo el hilo");
-	int sock = *(int*)socketCliente;
-
-	printf("Cliente conectado.\n");
-
-	int enviar = 1;
-	char message[PACKAGESIZE];
-
-	printf("Conectado al servidor. Bienvenido al sistema, ya puede enviar mensajes. Escriba 'exit' para salir\n");
-
-	while(enviar){
-		fgets(message, PACKAGESIZE, stdin);			// Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
-		if (!strcmp(message,"exit\n")) enviar = 0;			// Chequeo que el usuario no quiera salir
-		if (enviar) send(sock, message, strlen(message) + 1, 0); 	// Solo envio si el usuario no quiere salir.
+	if (cliente_socket < 0) {
+		perror("accept failed");
+		return 1;
 	}
 
-	close(sock);
+	return pthread_join(thread_id, NULL);
 }
+
+void *connection_handler(void *socket_cliente) {
+
+	int sock = *(int*) socket_cliente;
+	int read_size;
+	char cliente_mensaje[PACKAGESIZE];
+	while ((read_size = recv(sock, cliente_mensaje, PACKAGESIZE, 0)) > 0) {
+		cliente_mensaje[read_size] = '\0';
+		fputs(cliente_mensaje, stdout);
+		memset(cliente_mensaje, 0, PACKAGESIZE);
+		//Reenvio el mensaje a Memoria y FileSystem
+		send(socket_memoria, cliente_mensaje, strlen(cliente_mensaje) + 1, 0);
+		send(socket_fs, cliente_mensaje, strlen(cliente_mensaje) + 1, 0);
+	}
+	fflush(stdout);
+	return 0;
+}
+
+
+//Es lo anterior dejo por si sirve
+//void conectar(){
+//	struct addrinfo hints;
+//	struct addrinfo *serverInfo;
+//
+//	memset(&hints, 0, sizeof(hints));
+//	hints.ai_family = AF_UNSPEC;
+//	hints.ai_flags = AI_PASSIVE;
+//	hints.ai_socktype = SOCK_STREAM;
+//
+//	getaddrinfo(NULL, puertoProg, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
+//
+//	int listenningSocket;
+//	listenningSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
+//
+//	bind(listenningSocket,serverInfo->ai_addr, serverInfo->ai_addrlen);
+//	freeaddrinfo(serverInfo);
+//
+//	while(1){
+//		listen(listenningSocket, BACKLOG);		// IMPORTANTE: listen() es una syscall BLOQUEANTE.
+//
+//		puts("Connection accepted --- Esperando conexiones?");
+//
+//		pthread_t sniffer_thread;
+//
+//		struct sockaddr_in addr;
+//		socklen_t addrlen = sizeof(addr);
+//
+//		int socketCliente = accept(listenningSocket, (struct sockaddr *) &addr,
+//				&addrlen);
+//
+//		int *new_sock = malloc(1);
+//		*new_sock = socketCliente;
+//
+//		if (pthread_create(&sniffer_thread, NULL, connection_handler,
+//				(void*) new_sock)) {
+//			printf("No se creo el hilo");
+//			perror("could not create thread");
+//			return;
+//		}
+//
+//		//Now join the thread , so that we dont terminate before the thread
+//		pthread_join(sniffer_thread, NULL);
+//		puts("Handler assigned");
+//	}
+//
+//	close(listenningSocket);
+//}
+//
+//void *connection_handler(void *socketCliente)
+//{
+//	printf("Se creo el hilo");
+//	int sock = *(int*)socketCliente;
+//
+//	printf("Cliente conectado.\n");
+//
+//	int enviar = 1;
+//	char message[PACKAGESIZE];
+//
+//	printf("Conectado al servidor. Bienvenido al sistema, ya puede enviar mensajes. Escriba 'exit' para salir\n");
+//
+//	while(enviar){
+//		fgets(message, PACKAGESIZE, stdin);			// Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
+//		if (!strcmp(message,"exit\n")) enviar = 0;			// Chequeo que el usuario no quiera salir
+//		if (enviar) send(sock, message, strlen(message) + 1, 0); 	// Solo envio si el usuario no quiere salir.
+//	}
+//
+//	close(sock);
+//}
