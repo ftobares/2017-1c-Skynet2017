@@ -139,25 +139,25 @@ int conectar_otro_server(char* ip, char* puerto) {
 }
 
 int iniciar_servidor() {
-	int socket_desc, cliente_socket, c;
-	struct sockaddr_in server, client;
+	int socket_para_programa, socket_para_cpu, cliente_socket, c;
+	struct sockaddr_in server, server_dos, client;
 	// Create socket
-	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-	if (socket_desc == -1) {
-		printf("Could not create socket");
+	socket_para_programa = socket(AF_INET, SOCK_STREAM, 0);
+	if (socket_para_programa == -1) {
+		printf("No se pudo crear el socket");
 	}
-	puts("Socket creado");
+	puts("Socket para programa creado");
 	// Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(puertoProg);
 	// Bind
-	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+	if (bind(socket_para_programa, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		// print the error message
-		perror("bind failed. Error");
+		perror("Bind fallo. Error");
 		return 1;
 	}
-	puts("bind done");
+	puts("bind socket programa hecho");
 
 	//Conectarse a la Memoria
 	socket_memoria = conectar_otro_server(ipMemoria, puertoMemoria);
@@ -165,29 +165,29 @@ int iniciar_servidor() {
 	//Conectarse al FileSystem
 	socket_fs = conectar_otro_server(ipFileSystem, puertoFileSystem);
 
-	listen(socket_desc, BACKLOG);
+	listen(socket_para_programa, BACKLOG);
 
 	puts("Esperando por conexiones entrantes...");
 	c = sizeof(struct sockaddr_in);
 	pthread_t thread_id;
-	while ((cliente_socket = accept(socket_desc, (struct sockaddr *) &client,
+	while ((cliente_socket = accept(socket_para_programa, (struct sockaddr *) &client,
 			(socklen_t*) &c))) {
 		printf("Conexion aceptada, cliente: %d\n", cliente_socket);
 		if (pthread_create(&thread_id, NULL, connection_handler,
 				(void*) &cliente_socket) < 0) {
-			perror("could not create thread");
+			perror("No se pudo crear el thread");
 			return 1;
 		}
-		puts("Handler assigned");
+		puts("Handler asignado");
 	}
 	if (cliente_socket < 0) {
-		perror("accept failed");
+		perror("Fallo accept");
 		return 1;
 	}
 
 	if(pthread_join(thread_id, NULL) == 0){
 		close(cliente_socket);
-		close(socket_desc);
+		close(socket_para_programa);
 		close(socket_memoria);
 		close(socket_fs);
 		return 0;
