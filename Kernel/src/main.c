@@ -247,26 +247,6 @@ int iniciar_servidor() {
 					new_socket, inet_ntoa(server.sin_addr),
 					ntohs(server.sin_port));
 
-
-			//Recibir y enviar mensaje a Memoria y FileSystem
-			if ((read_size = recv(new_socket, mensaje, PACKAGESIZE, 0)) > 0){
-				mensaje[read_size] = '\0';
-			}
-
-			if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
-			{
-				perror("send memoria failed");
-			}
-
-			if( send(socket_fs, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
-			{
-				perror("send filesystem failed");
-			}
-
-			printf("%d",read_size);
-			puts(mensaje);
-			puts("mensajes a memoria y filesystem enviados correctamente");
-
 			//Agregar new socket al array de sockets
 			for (i = 0; i < max_clientes; i++) {
 				//Si la posicion es vacia
@@ -298,6 +278,26 @@ int iniciar_servidor() {
 				} else {
 					buffer[valorLectura] = '\0';
 				}
+			}
+
+			//Recibir y enviar mensaje a Memoria y FileSystem
+			if ((read_size = recv(sd, mensaje, PACKAGESIZE, 0)) > 0){
+				mensaje[read_size] = '\0';
+
+				if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+				{
+					perror("send memoria failed");
+				}
+
+				if( send(socket_fs, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+				{
+					perror("send filesystem failed");
+				}
+
+				printf("read size: %d\n",read_size);
+				puts(mensaje);
+				puts("mensajes a memoria y filesystem enviados correctamente");
+				memset(mensaje, 0, sizeof(mensaje));
 			}
 		}
 	}
