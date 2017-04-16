@@ -264,8 +264,9 @@ int iniciar_servidor() {
 			sd = cliente_socket[i];
 
 			if (FD_ISSET(sd, &readfds)) {
+				valorLectura = recv(sd, mensaje, PACKAGESIZE, 0);
 				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
-				if ((valorLectura = read(sd, buffer, PACKAGESIZE)) == 0) {
+				if (valorLectura == 0) {
 					//Alguien se desconecto, obtenemos los detalles e imprimimos
 					getpeername(sd, (struct sockaddr*) &server,
 							(socklen_t*) &addrlen);
@@ -275,29 +276,25 @@ int iniciar_servidor() {
 					//Cerrar el socket y marcar como 0 en la lista para reusar
 					close(sd);
 					cliente_socket[i] = 0;
+				}
+				if(valorLectura > 0) {
+					mensaje[valorLectura] = '\0';
+					if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+					{
+						perror("send memoria failed");
+					}
+
+					if( send(socket_fs, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+					{
+						perror("send filesystem failed");
+					}
+
+					printf("valor lectura: %d\n",valorLectura);
+					puts(mensaje);
+					puts("mensajes a memoria y filesystem enviados correctamente");
 				} else {
-					buffer[valorLectura] = '\0';
+					printf("recv error");
 				}
-			}
-
-			//Recibir y enviar mensaje a Memoria y FileSystem
-			if ((read_size = recv(sd, mensaje, PACKAGESIZE, 0)) > 0){
-				mensaje[read_size] = '\0';
-
-				if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
-				{
-					perror("send memoria failed");
-				}
-
-				if( send(socket_fs, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
-				{
-					perror("send filesystem failed");
-				}
-
-				printf("read size: %d\n",read_size);
-				puts(mensaje);
-				puts("mensajes a memoria y filesystem enviados correctamente");
-				memset(mensaje, 0, sizeof(mensaje));
 			}
 		}
 	}
