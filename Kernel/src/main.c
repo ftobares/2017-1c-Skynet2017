@@ -11,8 +11,11 @@
 #include <string.h> // strlen
 #include <arpa/inet.h> //inet_addr
 
-#define BACKLOG 3			// Cantidad conexiones maximas
+#define BACKLOG 30			// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
+#define TRUE   1
+#define FALSE  0
+#define CantClientes 30
 
 //Variables Globales
 t_config *config;
@@ -34,7 +37,6 @@ void imprimirSemInt(char* config_param);
 void imprimirSharedVars(char* config_param);
 int conectar_otro_server(char* ip, char* puerto);
 
-void *connection_handler(void *);
 int iniciar_servidor();
 
 int main(int argc, char* argv) {
@@ -97,9 +99,9 @@ void cargar_y_mostrar_configuracion() {
 	int quantumSleep = config_get_int_value(config, "QUANTUM_SLEEP");
 	char* algoritmo = config_get_string_value(config, "ALGORITMO");
 	int gradoMultiprog = config_get_int_value(config, "GRADO_MULTIPROG");
-	char* semIds = get_config_list_de_string_array("SEM_IDS");
+	/*char* semIds = get_config_list_de_string_array("SEM_IDS");
 	char* semInit = get_config_list_de_string_array("SEM_INIT");
-	char* sharedVars = get_config_list_de_string_array("SHARED_VARS");
+	char* sharedVars = get_config_list_de_string_array("SHARED_VARS");*/
 	int stackSize = config_get_int_value(config, "STACK_SIZE");
 
 	printf("Imprimir archivo de configuración: \n");
@@ -139,25 +141,20 @@ int conectar_otro_server(char* ip, char* puerto) {
 }
 
 int iniciar_servidor() {
-	int socket_para_programa, socket_para_cpu, cliente_socket, c;
-	struct sockaddr_in server, server_dos, client;
-	// Create socket
-	socket_para_programa = socket(AF_INET, SOCK_STREAM, 0);
-	if (socket_para_programa == -1) {
-		printf("No se pudo crear el socket");
-	}
-	puts("Socket para programa creado");
-	// Prepare the sockaddr_in structure
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(puertoProg);
-	// Bind
-	if (bind(socket_para_programa, (struct sockaddr *) &server, sizeof(server)) < 0) {
-		// print the error message
-		perror("Bind fallo. Error");
-		return 1;
-	}
-	puts("bind socket programa hecho");
+
+	int opt = TRUE;
+	int master_socket, addrlen, new_socket, cliente_socket[CantClientes],
+			max_clientes = CantClientes, actividad, i, valorLectura, sd, read_size;
+	int max_sd;
+	struct sockaddr_in server;
+
+	char buffer[PACKAGESIZE];
+
+	//set de socket descriptores
+	fd_set readfds;
+
+	//a message
+	char mensaje[PACKAGESIZE];
 
 	//Conectarse a la Memoria
 	socket_memoria = conectar_otro_server(ipMemoria, puertoMemoria);
@@ -165,122 +162,145 @@ int iniciar_servidor() {
 	//Conectarse al FileSystem
 	socket_fs = conectar_otro_server(ipFileSystem, puertoFileSystem);
 
-	listen(socket_para_programa, BACKLOG);
+	//inicializar todos los cliente_socket[] a 0 (No chequeado)
+	for (i = 0; i < max_clientes; i++) {
+		cliente_socket[i] = 0;
+	}
 
+	//crear un socket maestro
+	if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+		perror("socket failed");
+		exit(EXIT_FAILURE);
+	}
+
+	puts("Socket maestro creado");
+
+	//setear socket maestro para que permita multiples conexiones (Buenas practicas)
+	if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *) &opt,
+			sizeof(opt)) < 0) {
+		perror("setsockopt failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//Tipo de socket creado
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(puertoProg);
+
+	//bind
+	if (bind(master_socket, (struct sockaddr *) &server, sizeof(server)) < 0) {
+		perror("bind failed");
+		exit(EXIT_FAILURE);
+	}
+	printf("Listener en puerto %d \n", puertoProg);
+
+	//Listen
+	if (listen(master_socket, BACKLOG) < 0) {
+		perror("listen failed");
+		exit(EXIT_FAILURE);
+	}
+
+	//accept the incoming connection
+	addrlen = sizeof(server);
 	puts("Esperando por conexiones entrantes...");
-	c = sizeof(struct sockaddr_in);
-	pthread_t thread_id;
-	while ((cliente_socket = accept(socket_para_programa, (struct sockaddr *) &client,
-			(socklen_t*) &c))) {
-		printf("Conexion aceptada, cliente: %d\n", cliente_socket);
-		if (pthread_create(&thread_id, NULL, connection_handler,
-				(void*) &cliente_socket) < 0) {
-			perror("No se pudo crear el thread");
-			return 1;
+
+	while (TRUE) {
+		//Limpiar el socket set
+		FD_ZERO(&readfds);
+
+		//Agregar el socket maestro al set
+		FD_SET(master_socket, &readfds);
+		max_sd = master_socket;
+
+		//Agregar sockets hijos al set
+		for (i = 0; i < max_clientes; i++) {
+			//socket descriptor
+			sd = cliente_socket[i];
+
+			//si es un socket valido, se agrega a la lista de lectura
+			if (sd > 0)
+				FD_SET(sd, &readfds);
+
+			//Numero de file descriptor mas alto, lo necesita para la función de seleccion
+			if (sd > max_sd)
+				max_sd = sd;
 		}
-		puts("Handler asignado");
-	}
-	if (cliente_socket < 0) {
-		perror("Fallo accept");
-		return 1;
+
+		//espera por una actividad de uno de los sockets, el timeout es NULL (Se espera indefinidamente)
+		actividad = select(max_sd + 1, &readfds, NULL, NULL, NULL);
+
+		if (actividad < 0) {
+			printf("select error");
+		}
+
+		//Si pasa algo en el socket maestro, entonces es una conexion entrante
+		if (FD_ISSET(master_socket, &readfds)) {
+			if ((new_socket = accept(master_socket, (struct sockaddr *) &server,
+					(socklen_t*) &addrlen)) < 0) {
+				perror("accept");
+				exit(EXIT_FAILURE);
+			}
+
+			//inform user of socket number - used in send and receive commands
+			printf(
+					"Nueva conexion, socket fd es %d , ip es : %s , puerto : %d \n",
+					new_socket, inet_ntoa(server.sin_addr),
+					ntohs(server.sin_port));
+
+
+			//Recibir y enviar mensaje a Memoria y FileSystem
+			if ((read_size = recv(new_socket, mensaje, PACKAGESIZE, 0)) > 0){
+				mensaje[read_size] = '\0';
+			}
+
+			if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+			{
+				perror("send memoria failed");
+			}
+
+			if( send(socket_fs, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+			{
+				perror("send filesystem failed");
+			}
+
+			printf("%d",read_size);
+			puts(mensaje);
+			puts("mensajes a memoria y filesystem enviados correctamente");
+
+			//Agregar new socket al array de sockets
+			for (i = 0; i < max_clientes; i++) {
+				//Si la posicion es vacia
+				if (cliente_socket[i] == 0) {
+					cliente_socket[i] = new_socket;
+					printf("Agregando a la lista de sockets como %d\n", i);
+
+					break;
+				}
+			}
+		}
+
+		//Caso contrario, alguna operacion E/S en algun otro socket
+		for (i = 0; i < max_clientes; i++) {
+			sd = cliente_socket[i];
+
+			if (FD_ISSET(sd, &readfds)) {
+				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
+				if ((valorLectura = read(sd, buffer, PACKAGESIZE)) == 0) {
+					//Alguien se desconecto, obtenemos los detalles e imprimimos
+					getpeername(sd, (struct sockaddr*) &server,
+							(socklen_t*) &addrlen);
+					printf("Host desconectado , ip %s , puerto %d \n",
+							inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+
+					//Cerrar el socket y marcar como 0 en la lista para reusar
+					close(sd);
+					cliente_socket[i] = 0;
+				} else {
+					buffer[valorLectura] = '\0';
+				}
+			}
+		}
 	}
 
-	if(pthread_join(thread_id, NULL) == 0){
-		close(cliente_socket);
-		close(socket_para_programa);
-		close(socket_memoria);
-		close(socket_fs);
-		return 0;
-	}else{
-		perror("Error en Thread");
-		return 1;
-	}
-}
-
-void *connection_handler(void *socket_cliente) {
-
-	int sock = *(int*) socket_cliente;
-	int read_size;
-	char cliente_mensaje[PACKAGESIZE];
-	while ((read_size = recv(sock, cliente_mensaje, PACKAGESIZE, 0)) > 0) {
-		cliente_mensaje[read_size] = '\0';
-		fputs(cliente_mensaje, stdout);
-		//Reenvio el mensaje a Memoria y FileSystem
-		send(socket_memoria, cliente_mensaje, strlen(cliente_mensaje) + 1, 0);
-		send(socket_fs, cliente_mensaje, strlen(cliente_mensaje) + 1, 0);
-		memset(cliente_mensaje, 0, PACKAGESIZE);
-	}
-	fflush(stdout);
 	return 0;
 }
-
-
-//Es lo anterior dejo por si sirve
-//void conectar(){
-//	struct addrinfo hints;
-//	struct addrinfo *serverInfo;
-//
-//	memset(&hints, 0, sizeof(hints));
-//	hints.ai_family = AF_UNSPEC;
-//	hints.ai_flags = AI_PASSIVE;
-//	hints.ai_socktype = SOCK_STREAM;
-//
-//	getaddrinfo(NULL, puertoProg, &hints, &serverInfo); // Notar que le pasamos NULL como IP, ya que le indicamos que use localhost en AI_PASSIVE
-//
-//	int listenningSocket;
-//	listenningSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
-//
-//	bind(listenningSocket,serverInfo->ai_addr, serverInfo->ai_addrlen);
-//	freeaddrinfo(serverInfo);
-//
-//	while(1){
-//		listen(listenningSocket, BACKLOG);		// IMPORTANTE: listen() es una syscall BLOQUEANTE.
-//
-//		puts("Connection accepted --- Esperando conexiones?");
-//
-//		pthread_t sniffer_thread;
-//
-//		struct sockaddr_in addr;
-//		socklen_t addrlen = sizeof(addr);
-//
-//		int socketCliente = accept(listenningSocket, (struct sockaddr *) &addr,
-//				&addrlen);
-//
-//		int *new_sock = malloc(1);
-//		*new_sock = socketCliente;
-//
-//		if (pthread_create(&sniffer_thread, NULL, connection_handler,
-//				(void*) new_sock)) {
-//			printf("No se creo el hilo");
-//			perror("could not create thread");
-//			return;
-//		}
-//
-//		//Now join the thread , so that we dont terminate before the thread
-//		pthread_join(sniffer_thread, NULL);
-//		puts("Handler assigned");
-//	}
-//
-//	close(listenningSocket);
-//}
-//
-//void *connection_handler(void *socketCliente)
-//{
-//	printf("Se creo el hilo");
-//	int sock = *(int*)socketCliente;
-//
-//	printf("Cliente conectado.\n");
-//
-//	int enviar = 1;
-//	char message[PACKAGESIZE];
-//
-//	printf("Conectado al servidor. Bienvenido al sistema, ya puede enviar mensajes. Escriba 'exit' para salir\n");
-//
-//	while(enviar){
-//		fgets(message, PACKAGESIZE, stdin);			// Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
-//		if (!strcmp(message,"exit\n")) enviar = 0;			// Chequeo que el usuario no quiera salir
-//		if (enviar) send(sock, message, strlen(message) + 1, 0); 	// Solo envio si el usuario no quiere salir.
-//	}
-//
-//	close(sock);
-//}
