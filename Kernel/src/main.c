@@ -279,6 +279,17 @@ int iniciar_servidor() {
 				}
 				if(valorLectura > 0) {
 					mensaje[valorLectura] = '\0';
+					/* send to everyone! */
+					int j;
+					for(j = 0; j <= max_sd; j++){
+
+						/* except the listener and ourselves */
+						if (cliente_socket[j] != sd) {
+
+							if (send(cliente_socket[j], mensaje, strlen(mensaje), 0) == -1)
+								perror("send() error lol!");
+						}
+					}
 					if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
 					{
 						perror("send memoria failed");
