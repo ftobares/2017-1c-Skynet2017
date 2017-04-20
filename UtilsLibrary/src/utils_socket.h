@@ -17,7 +17,7 @@ typedef struct {
 
 typedef struct {
 	int socket;
-	struct sockaddr_in* socket_info;
+	struct sockaddr_in socket_info;
 } t_master_socket;
 
 t_socket cliente_crear_socket(char* ip, char* puerto);
@@ -28,6 +28,6 @@ t_master_socket servidor_crear_socket_master(int puerto);
 
 t_socket conectar_a_otro_servidor(char* ip, char* puerto);
 
-bool servidor_socket_bind_and_listen(t_master_socket un_socket, int opt, int conexiones_maximas);
+t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt, int conexiones_maximas);
 
 #endif /* SRC_UTILS_SOCKET_H_ */

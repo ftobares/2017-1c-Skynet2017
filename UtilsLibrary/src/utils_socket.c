@@ -39,7 +39,8 @@ t_socket cliente_crear_socket(char* ip, char* puerto) {
 	}
 }
 
-/*@NAME: crear_socket_servidor (QUIZAS DEJE DE USARSE)
+
+/*@NAME: crear_socket_servidor (deprecated)
  *@DESC: Recibe un int con el puerto a escuchar.
  *		 Crea el socket y asigna el identificador. Rellena addrinfo
  *		 con AF_INET, INADDR_ANY y el PUERTO.
@@ -67,9 +68,9 @@ t_master_socket servidor_crear_socket_master(int puerto) {
 	t_master_socket un_socket;
 	un_socket.socket = 0;
 	if ((un_socket.socket = socket(AF_INET, SOCK_STREAM, 0)) != -1) {
-		un_socket.socket_info->sin_family = AF_INET;
-		un_socket.socket_info->sin_addr.s_addr = INADDR_ANY;
-		un_socket.socket_info->sin_port = htons(puerto);
+		un_socket.socket_info.sin_family = AF_INET;
+		un_socket.socket_info.sin_addr.s_addr = INADDR_ANY;
+		un_socket.socket_info.sin_port = htons(puerto);
 		return un_socket;
 	} else {
 		perror("Error al crear el socket servidor\n");
@@ -90,11 +91,18 @@ t_socket conectar_a_otro_servidor(char* ip, char* puerto) {
 	return socket_cliente;
 }
 
-/*@NAME: socket_server_bind_and_listen
- *@DESC: Funcion para configurar socket y dejar escuchando a traves
- *		 de un puerto.
+/*@NAME: servidor_crear_socket_bind_and_listen
+ *@DESC: Funcion para crear, configurar y dejar escuchando un socket
+ *		 en un puerto. Uso exclusivo para socket select.
  */
-bool servidor_socket_bind_and_listen(t_master_socket un_socket, int opt, int conexiones_maximas) {
+t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt, int conexiones_maximas) {
+
+	t_master_socket un_socket;
+	un_socket.socket = 0;
+	if ((un_socket.socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+		perror("Error al crear el socket servidor\n");
+		exit(EXIT_FAILURE);
+	}
 
 	//setear socket maestro para que permita multiples conexiones (Buenas practicas)
 	if (setsockopt(un_socket.socket, SOL_SOCKET, SO_REUSEADDR, (char *) &opt,
@@ -103,12 +111,16 @@ bool servidor_socket_bind_and_listen(t_master_socket un_socket, int opt, int con
 		exit(EXIT_FAILURE);
 	}
 
+	un_socket.socket_info.sin_family = AF_INET;
+	un_socket.socket_info.sin_addr.s_addr = INADDR_ANY; //inet_addr("127.0.0.1");
+	un_socket.socket_info.sin_port = htons(puerto);
+
 	//bind
-	if (bind(un_socket.socket, (struct sockaddr *) &(un_socket.socket_info), sizeof(un_socket.socket_info)) < 0) {
+	if (bind(un_socket.socket, (struct sockaddr*) &un_socket.socket_info, sizeof(un_socket.socket_info)) != 0) {
 		perror("ERROR. Fallo socket bind");
 		exit(EXIT_FAILURE);
 	}
-	printf("Listener en puerto %d \n", un_socket.socket_info->sin_port);
+	printf("Listener en puerto %d \n", un_socket.socket_info.sin_port);
 
 	//Listen
 	if (listen(un_socket.socket, conexiones_maximas) < 0) {
@@ -116,5 +128,5 @@ bool servidor_socket_bind_and_listen(t_master_socket un_socket, int opt, int con
 		exit(EXIT_FAILURE);
 	}
 
-	return true;
+	return un_socket;
 }

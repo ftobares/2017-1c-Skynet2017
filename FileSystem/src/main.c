@@ -10,52 +10,31 @@
 #include <pthread.h> //Agregar a C/C++ Build > GCC C Linker > Libraries > pthread (como las commons)
 #include <string.h> // strlen
 #include <arpa/inet.h> //inet_addr
+#include <src/utils_config.h>
+#include <src/utils_socket.h>
 
 #define BACKLOG 3			// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
+#define TIPO_PROYECTO 3
 
 //Variables Globales
-t_config *config;
-int puerto;
+t_fs_config* config;
+t_master_socket socket_desc;
 
 //Declaracion de funciones
-void cargar_y_mostrar_configuracion();
-bool validar_configuracion(t_config* config); //Poner en UtilsLibray
 void *connection_handler(void *);
 int iniciar_servidor();
 
 int main(int argc, char* argv) {
 
-	cargar_y_mostrar_configuracion();
+	char* file_path;
+	file_path = string_new();
+	string_append(&file_path, "./src/file_system.config");
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
+
 	int v_valor_retorno = iniciar_servidor();
 
 	return v_valor_retorno;
-}
-
-bool validar_configuracion(t_config* config){
-	return (config_keys_amount(config) > 0);
-}
-
-void cargar_y_mostrar_configuracion(){
-
-	/** Leer archivo de configuracion */
-	char* configPath;
-	configPath = string_new();
-	string_append(&configPath, "./src/");
-	string_append(&configPath, "file_system.config");
-	config = config_create(configPath);
-
-	if (!validar_configuracion(config)) {
-		printf("No se encontró el archivo de configuración.");
-		free(config); //Libero la memoria de config
-	}
-
-	puerto = config_get_int_value(config,"PUERTO");
-	char* puntoMontaje = config_get_string_value(config,"PUNTO_MONTAJE");
-
-	printf("Imprimir archivo de configuración: \n");
-	printf("PUERTO es %d \n",puerto);
-	printf("PUNTO_MONTAJE es %s \n",puntoMontaje);
 }
 
 int iniciar_servidor() {
@@ -70,7 +49,11 @@ int iniciar_servidor() {
 	// Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(puerto);
+	server.sin_port = htons(config->puerto);
+//	int cliente_socket, c;
+//	struct sockaddr_in client;
+//	socket_desc = servidor_crear_socket_master(config->puerto);
+
 	// Bind
 	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		// print the error message

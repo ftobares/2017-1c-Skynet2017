@@ -5,17 +5,18 @@
  *      Author: ftobares
  */
 #include <commons/config.h>
+#include <commons/collections/list.h>
 
 #ifndef SRC_UTILSFORCONFIG_H_
 #define SRC_UTILSFORCONFIG_H_
 
-typedef enum {
-	CONSOLA,
-	CPU,
-	FILESYSTEM,
-	KERNEL,
-	MEMEORIA
-} t_tipo_de_proyecto;
+//typedef enum {
+//	CONSOLA,
+//	CPU,
+//	FILESYSTEM,
+//	KERNEL,
+//	MEMEORIA
+//} t_tipo_de_proyecto;
 
 typedef struct {
 	char* ip_kernel;
@@ -28,7 +29,7 @@ typedef struct {
 } t_cpu_config;
 
 typedef struct {
-	char* puerto;
+	int puerto;
 	char* punto_montaje;
 } t_fs_config;
 
@@ -59,8 +60,10 @@ typedef struct {
 	int retardoMemoria;
 } t_memoria_config;
 
-void* cargar_configuracion(char* path_archivo, t_tipo_de_proyecto tipo_proyecto);
+void* cargar_configuracion(char* path_archivo, int /*t_tipo_de_proyecto*/ tipo_proyecto);
 
 bool validar_configuracion(t_config* config);
+
+t_list* get_config_list_de_string_array(char* key);
 
 #endif /* SRC_UTILSFORCONFIG_H_ */

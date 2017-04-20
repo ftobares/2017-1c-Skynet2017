@@ -10,145 +10,46 @@
 #include <pthread.h> //Agregar a C/C++ Build > GCC C Linker > Libraries > pthread (como las commons)
 #include <string.h> // strlen
 #include <arpa/inet.h> //inet_addr
+#include <src/utils_config.h>
+#include <src/utils_socket.h>
 
 #define BACKLOG 30			// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
 #define TRUE   1
 #define FALSE  0
 #define CantClientes 30
+#define TIPO_PROYECTO 4
 
 //Variables Globales
-t_config *config;
-int puertoProg;
-int puertoCPU;
-char* ipMemoria;
-char* puertoMemoria;
-char* ipFileSystem;
-char* puertoFileSystem;
-int socket_memoria;
-int socket_fs;
+t_kernel_config* config;
+t_socket socket_memoria;
+t_socket socket_fs;
+t_master_socket master_socket;
 
 //Declaracion de funciones
-void cargar_y_mostrar_configuracion();
-bool validar_configuracion(t_config* config); //Poner en UtilsLibray
-t_list* get_config_list_de_string_array(char* key); //Poner en UtilsLibray
-void imprimirSemIds(char* config_param);
-void imprimirSemInt(char* config_param);
-void imprimirSharedVars(char* config_param);
-int conectar_otro_server(char* ip, char* puerto);
-
 int iniciar_servidor();
 
 int main(int argc, char* argv) {
 
-	cargar_y_mostrar_configuracion();
+	char* file_path;
+	file_path = string_new();
+	string_append(&file_path, "./src/kernel.config");
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
 
 	int v_valor_retorno = iniciar_servidor();
 
 	return v_valor_retorno;
 }
 
-bool validar_configuracion(t_config* config) {
-	return (config_keys_amount(config) > 0);
-}
-
-t_list* get_config_list_de_string_array(char* key) {
-	t_list* list = list_create();
-	char** array = config_get_array_value(config, key);
-	int i = 0;
-	while (array[i] != NULL) {
-		list_add(list, array[i]);
-		i++;
-	}
-	return list;
-}
-
-void imprimirSemIds(char* config_param) {
-	printf("SEM_IDS es %s \n", config_param);
-}
-
-void imprimirSemInt(char* config_param) {
-	printf("SEM_INIT es %s \n", config_param);
-}
-
-void imprimirSharedVars(char* config_param) {
-	printf("SHARED_VARS es %s \n", config_param);
-}
-
-void cargar_y_mostrar_configuracion() {
-
-	/** Leer archivo de configuracion */
-	char* configPath;
-	configPath = string_new();
-	string_append(&configPath, "./src/");
-	string_append(&configPath, "kernel.config");
-	config = config_create(configPath);
-
-	if (!validar_configuracion(config)) {
-		printf("No se encontró el archivo de configuración.");
-		free(config); //Libero la memoria de config
-	}
-
-	puertoProg = config_get_int_value(config, "PUERTO_PROG");
-	puertoCPU = config_get_int_value(config, "PUERTO_CPU");
-	ipMemoria = config_get_string_value(config, "IP_MEMORIA");
-	puertoMemoria = config_get_string_value(config, "PUERTO_MEMORIA");
-	ipFileSystem = config_get_string_value(config, "IP_FS");
-	puertoFileSystem = config_get_string_value(config, "PUERTO_FS");
-	int quantum = config_get_int_value(config, "QUANTUM");
-	int quantumSleep = config_get_int_value(config, "QUANTUM_SLEEP");
-	char* algoritmo = config_get_string_value(config, "ALGORITMO");
-	int gradoMultiprog = config_get_int_value(config, "GRADO_MULTIPROG");
-	/*char* semIds = get_config_list_de_string_array("SEM_IDS");
-	char* semInit = get_config_list_de_string_array("SEM_INIT");
-	char* sharedVars = get_config_list_de_string_array("SHARED_VARS");*/
-	int stackSize = config_get_int_value(config, "STACK_SIZE");
-
-	printf("Imprimir archivo de configuración: \n");
-	printf("PUERTO_PROG es %d \n", puertoProg);
-	printf("PUERTO_CPU es %d \n", puertoCPU);
-	printf("IP_MEMORIA es %s \n", ipMemoria);
-	printf("PUERTO_MEMORIA es %s \n", puertoMemoria);
-	printf("IP_FS es %s \n", ipFileSystem);
-	printf("PUERTO_FS es %s \n", puertoFileSystem);
-	printf("QUANTUM es %d \n", quantum);
-	printf("QUANTUM_SLEEP es %d \n", quantumSleep);
-	printf("ALGORITMO es %s \n", algoritmo);
-	printf("GRADO_MULTIPROG es %d \n", gradoMultiprog);
-	printf("STACK_SIZE es %d \n", stackSize);
-//	list_iterate(semIds, imprimirSemIds);
-//	list_iterate(semIds, imprimirSemInt);
-//	list_iterate(semIds, imprimirSharedVars);
-}
-
-int conectar_otro_server(char* ip, char* puerto) {
-	struct addrinfo hints;
-	struct addrinfo *serverInfo;
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
-	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
-	getaddrinfo(ip, puerto, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
-	int serverSocket;
-	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
-			serverInfo->ai_protocol);
-
-	connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen);
-	freeaddrinfo(serverInfo); // No lo necesitamos mas
-
-	printf("Conectado a la ip=%s puerto=%s ya se pueden enviar mensajes\n", ip,
-			puerto);
-	return serverSocket;
-}
-
 int iniciar_servidor() {
 
 	int opt = TRUE;
-	int master_socket, addrlen, new_socket, cliente_socket[CantClientes],
-			max_clientes = CantClientes, actividad, i, valorLectura, sd, read_size;
+	int addrlen, new_socket, cliente_socket[CantClientes],
+			max_clientes = CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
 	int max_sd;
-	struct sockaddr_in server;
+//	struct sockaddr_in server;
 
-	char buffer[PACKAGESIZE];
+//	char buffer[PACKAGESIZE];
 
 	//set de socket descriptores
 	fd_set readfds;
@@ -157,51 +58,53 @@ int iniciar_servidor() {
 	char mensaje[PACKAGESIZE];
 
 	//Conectarse a la Memoria
-	socket_memoria = conectar_otro_server(ipMemoria, puertoMemoria);
+	socket_memoria = conectar_a_otro_servidor(config->ipMemoria, config->puertoMemoria);
 
 	//Conectarse al FileSystem
-	socket_fs = conectar_otro_server(ipFileSystem, puertoFileSystem);
+	socket_fs = conectar_a_otro_servidor(config->ipFileSystem, config->puertoFileSystem);
 
 	//inicializar todos los cliente_socket[] a 0 (No chequeado)
 	for (i = 0; i < max_clientes; i++) {
 		cliente_socket[i] = 0;
 	}
 
-	//crear un socket maestro
-	if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-		perror("socket failed");
-		exit(EXIT_FAILURE);
-	}
+	master_socket = servidor_crear_socket_bind_and_listen(config->puertoProg, opt, max_clientes);
 
-	puts("Socket maestro creado");
-
-	//setear socket maestro para que permita multiples conexiones (Buenas practicas)
-	if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *) &opt,
-			sizeof(opt)) < 0) {
-		perror("setsockopt failed");
-		exit(EXIT_FAILURE);
-	}
-
-	//Tipo de socket creado
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(puertoProg);
-
-	//bind
-	if (bind(master_socket, (struct sockaddr *) &server, sizeof(server)) < 0) {
-		perror("bind failed");
-		exit(EXIT_FAILURE);
-	}
-	printf("Listener en puerto %d \n", puertoProg);
-
-	//Listen
-	if (listen(master_socket, BACKLOG) < 0) {
-		perror("listen failed");
-		exit(EXIT_FAILURE);
-	}
+//	//crear un socket maestro
+//	if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+//		perror("socket failed");
+//		exit(EXIT_FAILURE);
+//	}
+//
+//	puts("Socket maestro creado");
+//
+//	//setear socket maestro para que permita multiples conexiones (Buenas practicas)
+//	if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *) &opt,
+//			sizeof(opt)) < 0) {
+//		perror("setsockopt failed");
+//		exit(EXIT_FAILURE);
+//	}
+//
+//	//Tipo de socket creado
+//	server.sin_family = AF_INET;
+//	server.sin_addr.s_addr = INADDR_ANY;
+//	server.sin_port = htons(config->puertoProg);
+//
+//	//bind
+//	if (bind(master_socket, (struct sockaddr *) &server, sizeof(server)) < 0) {
+//		perror("bind failed");
+//		exit(EXIT_FAILURE);
+//	}
+//	printf("Listener en puerto %d \n", config->puertoProg);
+//
+//	//Listen
+//	if (listen(master_socket, BACKLOG) < 0) {
+//		perror("listen failed");
+//		exit(EXIT_FAILURE);
+//	}
 
 	//accept the incoming connection
-	addrlen = sizeof(server);
+	addrlen = sizeof(master_socket.socket_info);
 	puts("Esperando por conexiones entrantes...");
 
 	while (TRUE) {
@@ -209,8 +112,8 @@ int iniciar_servidor() {
 		FD_ZERO(&readfds);
 
 		//Agregar el socket maestro al set
-		FD_SET(master_socket, &readfds);
-		max_sd = master_socket;
+		FD_SET(master_socket.socket, &readfds);
+		max_sd = master_socket.socket;
 
 		//Agregar sockets hijos al set
 		for (i = 0; i < max_clientes; i++) {
@@ -234,8 +137,8 @@ int iniciar_servidor() {
 		}
 
 		//Si pasa algo en el socket maestro, entonces es una conexion entrante
-		if (FD_ISSET(master_socket, &readfds)) {
-			if ((new_socket = accept(master_socket, (struct sockaddr *) &server,
+		if (FD_ISSET(master_socket.socket, &readfds)) {
+			if ((new_socket = accept(master_socket.socket, (struct sockaddr *) &master_socket.socket_info,
 					(socklen_t*) &addrlen)) < 0) {
 				perror("accept");
 				exit(EXIT_FAILURE);
@@ -244,8 +147,8 @@ int iniciar_servidor() {
 			//inform user of socket number - used in send and receive commands
 			printf(
 					"Nueva conexion, socket fd es %d , ip es : %s , puerto : %d \n",
-					new_socket, inet_ntoa(server.sin_addr),
-					ntohs(server.sin_port));
+					new_socket, inet_ntoa(master_socket.socket_info.sin_addr),
+					ntohs(master_socket.socket_info.sin_port));
 
 			//Agregar new socket al array de sockets
 			for (i = 0; i < max_clientes; i++) {
@@ -268,10 +171,10 @@ int iniciar_servidor() {
 				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
 				if (valorLectura == 0) {
 					//Alguien se desconecto, obtenemos los detalles e imprimimos
-					getpeername(sd, (struct sockaddr*) &server,
+					getpeername(sd, (struct sockaddr*) &master_socket.socket_info,
 							(socklen_t*) &addrlen);
 					printf("Host desconectado , ip %s , puerto %d \n",
-							inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+							inet_ntoa(master_socket.socket_info.sin_addr), ntohs(master_socket.socket_info.sin_port));
 
 					//Cerrar el socket y marcar como 0 en la lista para reusar
 					close(sd);
@@ -279,12 +182,12 @@ int iniciar_servidor() {
 				}
 				if(valorLectura > 0) {
 					mensaje[valorLectura] = '\0';
-					if( send(socket_memoria, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+					if( send(socket_memoria.socket, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
 					{
 						perror("send memoria failed");
 					}
 
-					if( send(socket_fs, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
+					if( send(socket_fs.socket, mensaje, strlen(mensaje), 0) != strlen(mensaje) )
 					{
 						perror("send filesystem failed");
 					}
