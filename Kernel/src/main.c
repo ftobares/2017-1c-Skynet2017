@@ -189,8 +189,12 @@ int iniciar_servidor() {
 						/* except the listener and ourselves */
 						if (cliente_socket[j] != sd) {
 
-							if (send(cliente_socket[j], mensaje, strlen(mensaje), 0) == -1)
+							if (send(cliente_socket[j], mensaje, strlen(mensaje), 0) == -1){
 								perror("send() error lol!");
+							}else {
+								printf("Mensaje enviado con el socket %d \n",cliente_socket[j]);
+							}
+
 						}
 					}
 					

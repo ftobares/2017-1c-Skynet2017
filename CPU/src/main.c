@@ -42,10 +42,10 @@ void conectar_al_kernel() {
 //	memset(&hints, 0, sizeof(hints));
 //	hints.ai_family = AF_UNSPEC; // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 //	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
-//	getaddrinfo(ipKernel, puertoKernel, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
+//	getaddrinfo(config->ip_kernel, config->puerto_kernel, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
 //
-//	int serverSocket, valorLectura;
-//	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
+//	int server_socket, valorLectura;
+//	server_socket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
 //			serverInfo->ai_protocol);
 
 	int c =connect(server_socket.socket, server_socket.socket_info->ai_addr, server_socket.socket_info->ai_addrlen);
