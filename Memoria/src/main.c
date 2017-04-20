@@ -10,63 +10,31 @@
 #include <pthread.h> //Agregar a C/C++ Build > GCC C Linker > Libraries > pthread (como las commons)
 #include <string.h> // strlen
 #include <arpa/inet.h> //inet_addr
+#include <src/utils_config.h>
+#include <src/utils_socket.h>
 
 #define BACKLOG 3			// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
+#define TIPO_PROYECTO 5
 
 //Variables Globales
-t_config *config;
-int puerto;
+t_memoria_config* config;
+t_master_socket socket_desc;
 
 //Declaracion de funciones
-void cargar_y_mostrar_configuracion();
-bool validar_configuracion(t_config* config); //Poner en UtilsLibray
 void *connection_handler(void *);
 int iniciar_servidor();
 
 int main(int argc, char* argv) {
 
-	cargar_y_mostrar_configuracion();
+	char* file_path;
+	file_path = string_new();
+	string_append(&file_path, "./src/memoria.config");
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
 
 	int v_valor_retorno = iniciar_servidor();
 
 	return v_valor_retorno;
-}
-
-bool validar_configuracion(t_config* config){
-	return (config_keys_amount(config) > 0);
-}
-
-void cargar_y_mostrar_configuracion(){
-
-	/** Leer archivo de configuracion */
-	char* configPath;
-	configPath = string_new();
-	string_append(&configPath, "./src/");
-	string_append(&configPath, "memoria.config");
-	config = config_create(configPath);
-
-	if (!validar_configuracion(config)) {
-		printf("No se encontró el archivo de configuración.");
-		free(config); //Libero la memoria de config
-	}
-
-	puerto = config_get_int_value(config,"PUERTO");
-	int marcos = config_get_int_value(config,"MARCOS");
-	int marcosSize = config_get_int_value(config,"MARCO_SIZE");
-	int entradasCache = config_get_int_value(config,"ENTRADAS_CACHE");
-	int cacheXProc = config_get_int_value(config,"CACHE_X_PROC");
-	char* reemplazoCache = config_get_string_value(config,"REEMPLAZO_CACHE");
-	int retardoMemoria = config_get_int_value(config,"RETARDO_MEMORIA");
-
-	printf("Imprimir archivo de configuración: \n");
-	printf("PUERTO es %d \n",puerto);
-	printf("MARCOS es %d \n",marcos);
-	printf("MARCOS_SIZE es %d \n",marcosSize);
-	printf("ENTRADAS_CACHE es %d \n",entradasCache);
-	printf("CACHE_X_PROC es %d \n",cacheXProc);
-	printf("REEMPLAZO_CACHE es %s \n",reemplazoCache);
-	printf("RETARDO_MEMORIA es %d \n",retardoMemoria);
 }
 
 int iniciar_servidor() {
@@ -81,9 +49,13 @@ int iniciar_servidor() {
 	// Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(puerto);
+	server.sin_port = htons(config->puerto);
+//	int c, cliente_socket;
+//	struct sockaddr_in client;
+//	socket_desc = servidor_crear_socket_master(config->puerto);
+
 	// Bind
-	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+	if (bind(socket_desc, (struct sockaddr *) &(server), sizeof(server)) < 0) {
 		// print the error message
 		perror("bind failed. Error");
 		return 1;

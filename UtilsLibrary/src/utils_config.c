@@ -5,6 +5,10 @@
  *      Author: ftobares
  */
 
+#include <stdio.h>
+#include <commons/config.h>
+#include <commons/string.h>
+#include <commons/collections/list.h>
 #include "utils_config.h"
 
 t_config *config;
@@ -18,7 +22,18 @@ bool validar_configuracion(t_config* config) {
 	return (config_keys_amount(config) > 0);
 }
 
-void* cargar_configuracion(char* path_archivo, t_tipo_de_proyecto tipo_proyecto) {
+t_list* get_config_list_de_string_array(char* key) {
+	t_list* list = list_create();
+	char** array = config_get_array_value(config, key);
+	int i = 0;
+	while (array[i] != NULL) {
+		list_add(list, array[i]);
+		i++;
+	}
+	return list;
+}
+
+void* cargar_configuracion(char* path_archivo, int /*t_tipo_de_proyecto*/ tipo_proyecto) {
 
 	/** Leer archivo de configuracion */
 	char* configPath;
@@ -33,7 +48,8 @@ void* cargar_configuracion(char* path_archivo, t_tipo_de_proyecto tipo_proyecto)
 	}
 
 	switch (tipo_proyecto) {
-	case CONSOLA:
+	case 1:
+//	case CONSOLA:
 		console_config = malloc(sizeof(t_console_config));
 		console_config->ip_kernel = config_get_string_value(config, "IP_KERNEL");
 		console_config->puerto_kernel = config_get_string_value(config,"PUERTO_KERNEL");
@@ -41,17 +57,20 @@ void* cargar_configuracion(char* path_archivo, t_tipo_de_proyecto tipo_proyecto)
 //		printf("IP_KERNEL es %s \n", console_config->ip_kernel);
 //		printf("PUERTO_KERNEL es %s \n", console_config->puerto_kernel);
 		return console_config;
-	case CPU:
+	case 2:
+//	case CPU:
 		cpu_config = malloc(sizeof(t_cpu_config));
 		cpu_config->ip_kernel = config_get_string_value(config, "IP_KERNEL");
 		cpu_config->puerto_kernel = config_get_string_value(config,"PUERTO_KERNEL");
 		return cpu_config;
-	case FILESYSTEM:
+	case 3:
+//	case FILESYSTEM:
 		fs_config = malloc(sizeof(t_fs_config));
-		fs_config->puerto = config_get_string_value(config, "PUERTO");
+		fs_config->puerto = config_get_int_value(config, "PUERTO");
 		fs_config->punto_montaje = config_get_string_value(config,"PUNTO_MONTAJE");
 		return fs_config;
-	case KERNEL:
+	case 4:
+//	case KERNEL:
 		kernel_config = malloc(sizeof(t_kernel_config));
 		kernel_config->puertoProg = config_get_int_value(config, "PUERTO_PROG");
 		kernel_config->puertoCPU = config_get_int_value(config, "PUERTO_CPU");
@@ -68,7 +87,8 @@ void* cargar_configuracion(char* path_archivo, t_tipo_de_proyecto tipo_proyecto)
 		kernel_config->sharedVars = get_config_list_de_string_array("SHARED_VARS");
 		kernel_config->stackSize = config_get_int_value(config, "STACK_SIZE");
 		return kernel_config;
-	case MEMEORIA:
+	case 5:
+//	case MEMEORIA:
 		memoria_config = malloc(sizeof(t_memoria_config));
 		memoria_config->puerto = config_get_int_value(config,"PUERTO");
 		memoria_config->marcos = config_get_int_value(config,"MARCOS");

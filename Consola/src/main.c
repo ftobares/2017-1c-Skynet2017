@@ -7,109 +7,49 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <src/utils_config.h>
+#include <src/utils_socket.h>
 
 #define PACKAGESIZE 1024
+#define TIPO_PROYECTO 1
 
 //Variables Globales
-t_config *config;
-char* ipKernel;
-char* puertoKernel;
+t_console_config* config;
+t_socket server_socket;
 
 //Declaracion de funciones
-void cargar_y_mostrar_configuracion();
-bool validar_configuracion(t_config* config); //Poner en UtilsLibray
 void conectar_al_kernel();
 
 int main(int argc, char* argv) {
 
-	cargar_y_mostrar_configuracion();
+	char* file_path;
+	file_path = string_new();
+	string_append(&file_path, "./src/consola.config");
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
 
 	conectar_al_kernel();
 
 	return 0;
 }
 
-bool validar_configuracion(t_config* config) {
-	return (config_keys_amount(config) > 0);
-}
-
-void cargar_y_mostrar_configuracion() {
-
-	/** Leer archivo de configuracion */
-	char* configPath;
-	configPath = string_new();
-	string_append(&configPath, "./src/");
-	string_append(&configPath, "consola.config");
-	config = config_create(configPath);
-
-	if (!validar_configuracion(config)) {
-		printf("No se encontró el archivo de configuración.");
-		free(config); //Libero la memoria de config
-	}
-
-	ipKernel = config_get_string_value(config, "IP_KERNEL");
-	puertoKernel = config_get_string_value(config, "PUERTO_KERNEL");
-
-	printf("Imprimir archivo de configuración: \n");
-	printf("IP_KERNEL es %s \n", ipKernel);
-	printf("PUERTO_KERNEL es %s \n", puertoKernel);
-}
-
 void conectar_al_kernel() {
-	struct addrinfo hints;
-	struct addrinfo *serverInfo;
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
-	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
-	getaddrinfo(ipKernel, puertoKernel, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
-	int serverSocket;
-	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
-			serverInfo->ai_protocol);
 
-	connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen);
-	freeaddrinfo(serverInfo); // No lo necesitamos mas
+	server_socket = cliente_crear_socket(config->ip_kernel, config->puerto_kernel);
+
+	connect(server_socket.socket, server_socket.socket_info->ai_addr, server_socket.socket_info->ai_addrlen);
+
+	freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
 
 	int enviar = 1;
 	char message[PACKAGESIZE];
-	printf(
-			"Conectado al servidor. Bienvenido al sistema, ya puede enviar mensajes. Escriba 'exit' para salir\n");
+	printf("Conectado al servidor. Ya puede enviar mensajes. Escriba 'exit' para salir\n");
 	while (enviar) {
 		fgets(message, PACKAGESIZE, stdin); // Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
 		if (!strcmp(message, "exit\n"))
 			enviar = 0; // Chequeo que el usuario no quiera salir
 		if (enviar)
-			send(serverSocket, message, strlen(message) + 1, 0); // Solo envio si el usuario no quiere salir.
+			send(server_socket.socket, message, strlen(message) + 1, 0); // Solo envio si el usuario no quiere salir.
 	}
 
-	close(serverSocket);
+	close(server_socket.socket);
 }
-
-//void conectarAlKernel(){
-//	struct addrinfo hints;
-//	struct addrinfo *serverInfo;
-//
-//	memset(&hints, 0, sizeof(hints));
-//	hints.ai_family = AF_UNSPEC;
-//	hints.ai_socktype = SOCK_STREAM;
-//
-//	getaddrinfo(ipKernel, puertoKernel, &hints, &serverInfo);
-//
-//	int serverSocket;
-//	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
-//
-//	connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen);
-//	freeaddrinfo(serverInfo);
-//
-//	char package[PACKAGESIZE];
-//	int status = 1;		// Estructura que manjea el status de los recieve.
-//
-//	printf("Esperando mensajes:\n");
-//
-//	while (status != 0){
-//		status = recv(serverSocket, (void*) package, PACKAGESIZE, 0);
-//		if (status != 0) printf("%s", package);
-//
-//	}
-//
-//	close(serverSocket);
-//}
