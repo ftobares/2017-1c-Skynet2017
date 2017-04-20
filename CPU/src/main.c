@@ -7,80 +7,60 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <src/utils_config.h>
+#include <src/utils_socket.h>
 
 #define PACKAGESIZE 1024
 #define TRUE   1
-
-char* ipKernel;
-char* puertoKernel;
+#define TIPO_PROYECTO 2
 
 //Variables Globales
-t_config *config;
+t_cpu_config* config;
+t_socket server_socket;
 
 //Declaracion de funciones
-void cargar_y_mostrar_configuracion();
-bool validar_configuracion(t_config* config); //Poner en UtilsLibray
 void conectar_al_kernel();
 
 int main(int argc, char* argv) {
 
-	cargar_y_mostrar_configuracion();
+	char* file_path;
+	file_path = string_new();
+	string_append(&file_path, "./src/cpu.config");
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
 
 	conectar_al_kernel();
 
 	return 0;
 }
 
-bool validar_configuracion(t_config* config) {
-	return (config_keys_amount(config) > 0);
-}
-
-void cargar_y_mostrar_configuracion() {
-
-	/** Leer archivo de configuracion */
-	char* configPath;
-	configPath = string_new();
-	string_append(&configPath, "./src/");
-	string_append(&configPath, "cpu.config");
-	config = config_create(configPath);
-
-	if (!validar_configuracion(config)) {
-		printf("No se encontró el archivo de configuración.");
-		free(config); //Libero la memoria de config
-	}
-
-	ipKernel = config_get_string_value(config, "IP_KERNEL");
-	puertoKernel = config_get_string_value(config, "PUERTO_KERNEL");
-
-	printf("Imprimir archivo de configuración: \n");
-	printf("IP_KERNEL es %s \n", ipKernel);
-	printf("PUERTO_KERNEL es %s \n", puertoKernel);
-}
-
 void conectar_al_kernel() {
-	struct addrinfo hints;
-	struct addrinfo *serverInfo;
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
-	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
-	getaddrinfo(ipKernel, puertoKernel, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
-	int serverSocket, valorLectura;
-	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
-			serverInfo->ai_protocol);
+	int valorLectura;
+	server_socket = cliente_crear_socket(config->ip_kernel, config->puerto_kernel);
 
-	int c =connect(serverSocket, serverInfo->ai_addr, serverInfo->ai_addrlen);
+//	struct addrinfo hints;
+//	struct addrinfo *serverInfo;
+//	memset(&hints, 0, sizeof(hints));
+//	hints.ai_family = AF_UNSPEC; // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+//	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
+//	getaddrinfo(ipKernel, puertoKernel, &hints, &serverInfo); // Carga en serverInfo los datos de la conexion
+//
+//	int serverSocket, valorLectura;
+//	serverSocket = socket(serverInfo->ai_family, serverInfo->ai_socktype,
+//			serverInfo->ai_protocol);
+
+	int c =connect(server_socket.socket, server_socket.socket_info->ai_addr, server_socket.socket_info->ai_addrlen);
 
 	if(c < 0){
 		printf("error en connect");
 		exit(-1);
 	}
-	freeaddrinfo(serverInfo); // No lo necesitamos mas
+	freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
 
 	//int enviar = 1;
 	char mensaje[PACKAGESIZE];
 	printf("Conectado al servidor. Bienvenido al sistema!\n");
 	while (TRUE) {
-		valorLectura = recv(serverSocket, mensaje, PACKAGESIZE, 0);
+		valorLectura = recv(server_socket.socket, mensaje, PACKAGESIZE, 0);
 		if(valorLectura > 0){
 			mensaje[valorLectura] = '\0';
 			fputs(mensaje, stdout);
@@ -91,5 +71,5 @@ void conectar_al_kernel() {
 		}
 	}
 
-	close(serverSocket);
+	close(server_socket.socket);
 }

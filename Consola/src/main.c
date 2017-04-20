@@ -11,7 +11,7 @@
 #include <src/utils_socket.h>
 
 #define PACKAGESIZE 1024
-#define tipo_proyecto 1
+#define TIPO_PROYECTO 1
 
 //Variables Globales
 t_console_config* config;
@@ -25,7 +25,7 @@ int main(int argc, char* argv) {
 	char* file_path;
 	file_path = string_new();
 	string_append(&file_path, "./src/consola.config");
-	config = cargar_configuracion(file_path, tipo_proyecto);
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
 
 	conectar_al_kernel();
 
