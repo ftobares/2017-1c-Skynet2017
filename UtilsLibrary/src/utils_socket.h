@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 
+//Estructuras genericas
 typedef struct {
 	int socket;
 	struct addrinfo* socket_info;
@@ -20,6 +21,18 @@ typedef struct {
 	struct sockaddr_in socket_info;
 } t_master_socket;
 
+typedef struct __attribute__((__packed__ )){
+	int32_t id_tipo;
+	int32_t tamanio;
+} t_header;
+
+typedef struct __attribute__((__packed__ )){
+	int32_t id_tipo;
+	int32_t socket; /*Creo que es util tenerlo, pero despues vemos si es necesario*/
+	void* data;
+} t_buffer;
+
+//Funciones
 t_socket cliente_crear_socket(char* ip, char* puerto);
 
 t_socket servidor_crear_socket(int puerto);
