@@ -43,4 +43,10 @@ t_socket conectar_a_otro_servidor(char* ip, char* puerto);
 
 t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt, int conexiones_maximas);
 
+t_buffer* crear_buffer(uint32_t id, uint32_t un_socket, void* data);
+
+t_buffer* recibir_mensaje(int32_t un_socket);
+
+int enviar_mensaje(t_header header, t_buffer buffer);
+
 #endif /* SRC_UTILS_SOCKET_H_ */

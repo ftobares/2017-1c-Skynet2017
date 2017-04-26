@@ -32,3 +32,11 @@ int validar_integridad_archivos(char* ruta_y_nombre_archivo1, char* md5){
 
 	return 0;
 }
+
+/*@NAME: convertir_lista_en_array (EN DESARROLLO)
+ *@DESC: Funcion para convertir una lista en un array
+ *		 Se utiliza principalmente en la serializacion
+ */
+void* convertir_lista_en_array(t_list* lista){
+	return "";
+}
