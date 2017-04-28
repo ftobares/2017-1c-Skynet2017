@@ -53,21 +53,21 @@ void* cargar_configuracion(char* path_archivo, int /*t_tipo_de_proyecto*/ tipo_p
 		console_config = malloc(sizeof(t_console_config));
 		console_config->ip_kernel = config_get_string_value(config, "IP_KERNEL");
 		console_config->puerto_kernel = config_get_string_value(config,"PUERTO_KERNEL");
-//		printf("Imprimir archivo de configuración de Consola: \n");
-//		printf("IP_KERNEL es %s \n", console_config->ip_kernel);
-//		printf("PUERTO_KERNEL es %s \n", console_config->puerto_kernel);
+		config_destroy(config);
 		return console_config;
 	case 2:
 //	case CPU:
 		cpu_config = malloc(sizeof(t_cpu_config));
 		cpu_config->ip_kernel = config_get_string_value(config, "IP_KERNEL");
 		cpu_config->puerto_kernel = config_get_string_value(config,"PUERTO_KERNEL");
+		config_destroy(config);
 		return cpu_config;
 	case 3:
 //	case FILESYSTEM:
 		fs_config = malloc(sizeof(t_fs_config));
 		fs_config->puerto = config_get_int_value(config, "PUERTO");
 		fs_config->punto_montaje = config_get_string_value(config,"PUNTO_MONTAJE");
+		config_destroy(config);
 		return fs_config;
 	case 4:
 //	case KERNEL:
@@ -86,6 +86,7 @@ void* cargar_configuracion(char* path_archivo, int /*t_tipo_de_proyecto*/ tipo_p
 		kernel_config->semInit = get_config_list_de_string_array("SEM_INIT");
 		kernel_config->sharedVars = get_config_list_de_string_array("SHARED_VARS");
 		kernel_config->stackSize = config_get_int_value(config, "STACK_SIZE");
+		config_destroy(config);
 		return kernel_config;
 	case 5:
 //	case MEMEORIA:
@@ -97,9 +98,11 @@ void* cargar_configuracion(char* path_archivo, int /*t_tipo_de_proyecto*/ tipo_p
 		memoria_config->cacheXProc = config_get_int_value(config,"CACHE_X_PROC");
 		memoria_config->reemplazoCache = config_get_string_value(config,"REEMPLAZO_CACHE");
 		memoria_config->retardoMemoria = config_get_int_value(config,"RETARDO_MEMORIA");
+		config_destroy(config);
 		return memoria_config;
 	default:
 		printf("ERROR: Tipo de proyecto no valido");
+		config_destroy(config);
 		return 1;
 	}
 }
