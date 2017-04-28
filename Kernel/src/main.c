@@ -19,10 +19,12 @@
 #define FALSE  0
 #define CantClientes 30
 #define TIPO_PROYECTO 4
+#define MSJ_CPU_HANDSHAKE '1'
 
 //Variables Globales
 t_kernel_config* config;
 t_socket socket_memoria;
+t_socket socket_cpu;
 t_socket socket_fs;
 t_master_socket master_socket;
 
@@ -46,6 +48,8 @@ int iniciar_servidor() {
 	int opt = TRUE;
 	int addrlen, new_socket, cliente_socket[CantClientes],
 			max_clientes = CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
+	char* buffer;
+	buffer = string_new();
 	int max_sd;
 //	struct sockaddr_in server;
 
@@ -59,6 +63,9 @@ int iniciar_servidor() {
 
 	//Conectarse a la Memoria
 	socket_memoria = conectar_a_otro_servidor(config->ipMemoria, config->puertoMemoria);
+
+	//Conectarse a la Memoria
+	socket_cpu = conectar_a_otro_servidor(config->ipMemoria, config->puertoCPU); //LO DE LA IP NO SE MUY BIEN COMO RESOLVERLO -- ANALIZAR USAR HILO
 
 	//Conectarse al FileSystem
 	socket_fs = conectar_a_otro_servidor(config->ipFileSystem, config->puertoFileSystem);
