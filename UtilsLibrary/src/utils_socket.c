@@ -160,7 +160,7 @@ t_buffer* recibir_mensaje(int32_t un_socket) {
 	if (recv(buffer.socket, &header, sizeof(header), MSG_WAITALL) == -1) {
 		buffer.id_tipo = 0;
 		perror("Error al recibir header");
-		return buffer;
+		return &buffer;
 	}
 
 	// Segundo recervar memoria suficiente para el mensaje
@@ -171,7 +171,7 @@ t_buffer* recibir_mensaje(int32_t un_socket) {
 		perror("Error al recibir el payload");
 	}
 
-	return buffer;
+	return &buffer;
 }
 
 /*@NAME: enviar_mensaje

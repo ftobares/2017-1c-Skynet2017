@@ -96,11 +96,11 @@ void conectar_al_kernel() {
 		printf("error en connect CPU -> KERNEL");
 		exit(-1);
 	}
-	/*
+
 	//HandShake CPU -> KERNEL
 	if (AUX_CONEC_KER == saludar(HSKERNEL, TOCPUKERNEL, server_socket.socket)) {
 		CONECTADOALKERNEL = 1;
-	}*/
+	}
 
 	freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
 
