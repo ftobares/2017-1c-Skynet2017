@@ -63,16 +63,20 @@ int saludar(int handshake, int tipo, int sRemoto) {
 
 	char *respuesta = malloc(BUFFERSIZE * sizeof(char));
 	char *mensaje = string_new();
+	string_append(&mensaje, "H");
 	string_append(&mensaje, string_itoa(handshake));
 	string_append(&mensaje, string_itoa(tipo));
-	int aux = 0;
+	int aux;
+
 	Enviar(sRemoto, mensaje);
 	Recibir(sRemoto, respuesta);
 
 	if (!(string_starts_with(respuesta, OK)))
-		perror("ERROR - HANDSHAKE NO FUE EXITOSO \n");
+	{
+		perror("ERROR: HANDSHAKE NO FUE EXITOSO \n");
+	}
 	else
-		aux = 1;
+		aux = 0;
 
 	if (mensaje != NULL)
 		free(mensaje);
@@ -93,7 +97,7 @@ void conectar_al_kernel() {
 			server_socket.socket_info->ai_addrlen);
 
 	if (AUX_CONEC_KER < 0) {
-		printf("error en connect CPU -> KERNEL");
+		printf("Error en connect CPU -> KERNEL\n");
 		exit(-1);
 	}
 
@@ -107,7 +111,7 @@ void conectar_al_kernel() {
 	//int enviar = 1;
 	if (CONECTADOALKERNEL) {
 		char mensaje[PACKAGESIZE];
-		printf("Conectado al servidor. Bienvenido al sistema!\n");
+		printf("Handshake correcto - Conectado al servidor. Bienvenido al sistema!\n");
 		while (TRUE) {
 			valorLectura = recv(server_socket.socket, mensaje, PACKAGESIZE, 0);
 			if (valorLectura > 0) {
@@ -122,4 +126,5 @@ void conectar_al_kernel() {
 	}
 
 	close(server_socket.socket);
+	return;
 }

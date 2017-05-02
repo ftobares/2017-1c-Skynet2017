@@ -18,6 +18,10 @@
 #define FALSE 0
 #define CantClientes 30
 #define TIPO_PROYECTO 4
+#define MSJ_HANDSHAKE 'H'
+#define MSJ_CONFIRMACION "1"
+#define MSJ_NEGACION     "0"
+#define HANDSHAKE_CPU '1'
 //Variables Globales
 t_kernel_config* config;
 t_socket socket_memoria;
@@ -25,25 +29,36 @@ t_socket socket_fs;
 t_master_socket master_socket;
 //Declaracion de funciones
 int iniciar_servidor();
+
 int main(int argc, char** argv) {
+
 	char* file_path; //= malloc(sizeof(char) * 1024);
 	file_path = string_new();
 	string_append(&file_path, "./src/kernel.config");
 	config = cargar_configuracion(file_path, TIPO_PROYECTO);
-	printf("Asignado KERNEL: %s \n", config->ipMemoria);
 	int v_valor_retorno = iniciar_servidor();
-	free(file_path);
 	return v_valor_retorno;
 }
+
+int EnviarDatos(int socket, void *buffer) {
+	int bytecount;
+
+	if ((bytecount = send(socket, buffer, strlen(buffer), 0)) == -1)
+		perror("No puedo enviar información al/los cliente/s");
+
+	return bytecount;
+}
+
 int iniciar_servidor() {
 	int opt = TRUE;
 	int addrlen, new_socket, cliente_socket[CantClientes], max_clientes =
-			CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
+	CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
 	int max_sd;
 
 	fd_set readfds;
 
 	char mensaje[PACKAGESIZE];
+	char tipo_mensaje;
 	//Conectarse a la Memoria
 	socket_memoria = conectar_a_otro_servidor(config->ipMemoria,
 			config->puertoMemoria);
@@ -57,39 +72,7 @@ int iniciar_servidor() {
 	}
 	master_socket = servidor_crear_socket_bind_and_listen(config->puertoProg,
 			opt, max_clientes);
-//	//crear un socket maestro
-//	if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-//	perror("socket failed");
-//	exit(EXIT_FAILURE);
-//	}
-//
-//	puts("Socket maestro creado");
-//
-//	//setear socket maestro para que permita multiples conexiones (Buenas practicas)
-//	if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *) &opt,
-//	sizeof(opt)) < 0) {
-//	perror("setsockopt failed");
-//	exit(EXIT_FAILURE);
-//	}
-//
-//	//Tipo de socket creado
-//	server.sin_family = AF_INET;
-//	server.sin_addr.s_addr = INADDR_ANY;
-//	server.sin_port = htons(config->puertoProg);
-//
-//	//bind
-//	if (bind(master_socket, (struct sockaddr *) &server, sizeof(server)) < 0) {
-//	perror("bind failed");
-//	exit(EXIT_FAILURE);
-//	}
-//	printf("Listener en puerto %d \n", config->puertoProg);
-//
-//	//Listen
-//	if (listen(master_socket, BACKLOG) < 0) {
-//	perror("listen failed");
-//	exit(EXIT_FAILURE);
-//	}
-//accept the incoming connection
+
 	addrlen = sizeof(master_socket.socket_info);
 	puts("Esperando por conexiones entrantes...");
 	while (TRUE) {
@@ -122,7 +105,7 @@ int iniciar_servidor() {
 				perror("accept");
 				exit(EXIT_FAILURE);
 			}
-			//inform user of socket number - used in send and receive commands
+			//informar usuario de numero de socket
 			printf(
 					"Nueva conexion, socket fd es %d , ip es : %s , puerto : %d \n",
 					new_socket, inet_ntoa(master_socket.socket_info.sin_addr),
@@ -142,6 +125,7 @@ int iniciar_servidor() {
 			sd = cliente_socket[i];
 			if (FD_ISSET(sd, &readfds)) {
 				valorLectura = recv(sd, mensaje, PACKAGESIZE, 0);
+
 				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
 				if (valorLectura == 0) {
 					//Alguien se desconecto, obtenemos los detalles e imprimimos
@@ -156,39 +140,55 @@ int iniciar_servidor() {
 					cliente_socket[i] = 0;
 				}
 				if (valorLectura > 0) {
-					mensaje[valorLectura] = '\0';
-					/* send to everyone! */
 					int j;
-					for (j = 0; j <= max_sd; j++) {
-						/* except the listener and ourselves */
-						if (cliente_socket[j] != sd) {
-							if (send(cliente_socket[j], mensaje,
-									strlen(mensaje), 0) == -1) {
-								perror("send() error lol!");
-							} else {
-								printf("Mensaje enviado con el socket %d \n",
-										cliente_socket[j]);
+					mensaje[valorLectura] = '\0';
+					tipo_mensaje = mensaje[0];
+					printf("MENSAJE CPU: %s\n", mensaje);
+					switch (tipo_mensaje) {
+					case MSJ_HANDSHAKE:
+						if(mensaje[1] == HANDSHAKE_CPU)
+							EnviarDatos(sd, MSJ_CONFIRMACION);
+						else
+							EnviarDatos(sd, MSJ_NEGACION);
+						break;
+
+					default:
+						/* send to everyone! */
+						for (j = 0; j <= max_sd; j++) {
+							// except the listener and ourselves
+							if (cliente_socket[j] != sd
+									&& cliente_socket[j] != 0) {
+								if (send(cliente_socket[j], mensaje,
+										strlen(mensaje), 0) == -1) {
+									perror("send() error!");
+								} else {
+									printf(
+											"Mensaje enviado con el socket %d \n",
+											cliente_socket[j]);
+								}
 							}
 						}
+						if (send(socket_memoria.socket, mensaje,
+								strlen(mensaje), 0) != strlen(mensaje)) {
+							perror("send memoria failed");
+						}
+						if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
+								!= strlen(mensaje)) {
+							perror("send filesystem failed");
+						}
+						printf("valor lectura: %d\n", valorLectura);
+						puts(
+								"mensajes a memoria y filesystem enviados correctamente");
+						break;
 					}
-					if (send(socket_memoria.socket, mensaje, strlen(mensaje), 0)
-							!= strlen(mensaje)) {
-						perror("send memoria failed");
-					}
-					if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
-							!= strlen(mensaje)) {
-						perror("send filesystem failed");
-					}
-					printf("valor lectura: %d\n", valorLectura);
-					puts(mensaje);
-					puts(
-							"mensajes a memoria y filesystem enviados correctamente");
+
 				} else {
-					printf("recv error");
+					printf("recv error \n");
 				}
 			}
 		}
 	}
 	return 0;
 }
+
 
