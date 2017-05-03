@@ -146,26 +146,27 @@ t_buffer crear_buffer(t_header header, uint32_t un_socket) {
 
 /*@NAME: recibir_mensaje
  *@DESC: Recibe datos y los guarda en el buffer
- *@DESC: (Falta la serializacion - seguro algo va a cambiar)
+ *@DESC: Tener en cuenta que el buffer.data tiene datos crudos
+ *@DESC: sin que hayan sido deserializados. Luego de esta llamada
+ *@DESC: hay que hace un switch por header.id_tipo y deserializar.
  */
 t_buffer recibir_mensaje(int32_t un_socket) {
 
 	t_buffer buffer;
 	buffer.socket = un_socket;
-	t_header header;
-	header.tamanio = -1;
+	buffer.header.tamanio = -1;
 
 	// Recibir datos y guardarlos en el buffer
 	// Primero recibo el header para saber tipo de mensaje y tamaño
-	if (recv(buffer.socket, &header, sizeof(header), MSG_WAITALL) == -1) {
+	if (recv(buffer.socket, &buffer.header, sizeof(t_header), MSG_WAITALL) == -1) {
 		buffer.header.id_tipo = 0;
 		perror("Error al recibir header");
 		return buffer;
 	}
 
 	// Segundo recervar memoria suficiente para el mensaje
-	buffer.data = malloc(header.tamanio);
-	if (read(buffer.socket, buffer.data, header.tamanio) == -1) {
+	buffer.data = malloc(buffer.header.tamanio);
+	if (read(buffer.socket, buffer.data, buffer.header.tamanio) == -1) {
 		buffer.header.id_tipo = 0;
 		free(buffer.data);
 		perror("Error al recibir el payload");
@@ -176,14 +177,13 @@ t_buffer recibir_mensaje(int32_t un_socket) {
 
 /*@NAME: enviar_mensaje
  *@DESC: Envia datos cargados en el buffer
- *@DESC: (Falta la serializacion - seguro algo va a cambiar)
+ *@DESC: Datos ya deben venir serializados
+ *@DESC: (Aunque se podria agregar aca la funcionalidad)
  *@RETURN: Devuelve 1-fallo/false , 0-exito/truel
  */
-int enviar_mensaje(t_header header, t_buffer buffer) {
-	if (send(buffer.socket, &header, sizeof(header), 0) > 0) {
-		if (write(buffer.socket, buffer.data, header.tamanio) > 0) {
-			return 0;
-		}
+int enviar_mensaje(t_buffer buffer) {
+	if (send(buffer.socket, &buffer.data, sizeof(buffer.header.tamanio), 0) > 0) {
+		return 0;
 	}
 	perror("Error al Enviar Datos\n");
 	return 1;
