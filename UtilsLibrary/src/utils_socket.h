@@ -49,8 +49,8 @@ t_buffer recibir_mensaje(int32_t un_socket);
 
 int enviar_mensaje(t_header header, t_buffer buffer);
 
-t_buffer serializar_generico(void* data, t_header header);
+t_buffer serializar_mensajes(void* data, t_buffer buffer);
 
-void* deserializar_generico(t_buffer* buffer, int tipo_mensaje);
+void* deserializar_mensaje(t_buffer buffer);
 
 #endif /* SRC_UTILS_SOCKET_H_ */

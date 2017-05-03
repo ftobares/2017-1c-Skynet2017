@@ -14,6 +14,17 @@
 #include <commons/collections/list.h>
 #include <sys/types.h>
 
+/* PCB */
+typedef struct{
+	pid_t pid;
+	int program_counter;
+	int cantidad_paginas;
+	//struct indice_de_codigo;
+	//struct indice_de_stack;
+	int posicion_stack;
+	int exit_code;
+} t_pcb; /* Definicion MUY vaga, refactorizar*/
+
 typedef struct{
 	int nro_marco;
 	pid_t pid; //proceso al que pertenece la pagina

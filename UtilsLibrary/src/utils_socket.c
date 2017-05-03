@@ -190,103 +190,66 @@ int enviar_mensaje(t_header header, t_buffer buffer) {
 }
 
 /*@NAME: serializar_mensajes
- *@DESC: En la funcion se pone en el buffer todos los datos a ser enviados,
- *@DESC: header y mensaje. Luego se serializan según el tipo de dato.
+ *@DESC: La funcion pone en el buffer todos los datos a ser enviados,
+ *@DESC: header y mensaje. Luego se serializan segun el tipo de dato.
  *@DESC: Datos de ingreso:
  *@DESC: 	data-> struct del mensaje
  *@DESC: 	buffer-> struct t_buffer creado anteriormente
  */
 t_buffer serializar_mensajes(void* data, t_buffer buffer){
 
-	int desplazamiento = 0;
-
 	switch(buffer.header.id_tipo){
 	case 1:
-		buffer.header.tamanio = sizeof(t_header)+sizeof(t_mensaje1);
-		buffer.data = malloc(buffer.header.tamanio);
-		t_mensaje1* msj1 = (t_mensaje1*) data;
+		printf("Inicio serializacion");
+//		buffer.data = malloc(buffer.header.tamanio);
+
+		t_mensaje1* mensaje = (struct t_mensaje1*) data;
 
 		//Agrego el encabezado en la estructura de datos
-		desplazamiento = sizeof(t_header);
-		memcpy(buffer.data,&buffer.header,sizeof(t_header));
+		memcpy(&buffer.data, &buffer.header, sizeof(buffer.header));
 
 		//Serializar int
-		uint32_t valor = htonl(msj1->valor1);
-		desplazamiento = desplazamiento + sizeof(uint32_t);
-		memcpy(buffer.data+desplazamiento,&valor,sizeof(uint32_t));
+		uint32_t host_to_network = htonl(mensaje->valor1);
+		memcpy(&buffer.data+sizeof(t_header), &host_to_network, sizeof(mensaje->valor1));
 
 		//Serializo string
-		desplazamiento = desplazamiento + sizeof(msj1->valor2);
-		memcpy(buffer.data+desplazamiento,&msj1->valor2,sizeof(msj1->valor2));
+		memcpy(&buffer.data+sizeof(t_header)+sizeof(mensaje->valor1), &mensaje->valor2, sizeof(mensaje->valor2));
 
-		break;
-	case 2:
-		buffer.header.tamanio = sizeof(t_header)+sizeof(t_mensaje2);
-		buffer.data = malloc(buffer.header.tamanio);
-		t_mensaje2* msj2 = (t_mensaje2*) data;
-
-		//Agrego el encabezado en la estructura de datos
-		desplazamiento = sizeof(t_header);
-		memcpy(&buffer.data,&buffer.header,sizeof(t_header));
-
-		//Serializar int
-		desplazamiento = desplazamiento + sizeof(uint32_t);
-		uint32_t valor1 = htonl(msj1->valor1);
-		desplazamiento = desplazamiento + sizeof(uint32_t);
-		memcpy(buffer.data+desplazamiento,&valor1,sizeof(uint32_t));
-
-		uint32_t valor2 = htonl(msj1->valor1);
-		desplazamiento = desplazamiento + sizeof(uint32_t);
-		memcpy(buffer.data+desplazamiento,&valor2,sizeof(uint32_t));
-
-		break;
+		return buffer;
 	default:
 		buffer.header.tamanio = -1;
 		return buffer;
 	}
 }
 
-/*@NAME: deserializar_generico
- *@DESC:
+/*@NAME: deserializar_mensaje (
+ *@DESC: La funcion deserializa un stream de datos poniendolo
+ *@DESC: en un struct segun el tipo de mensaje. Devuelve ese
+ *@DESC: struct cargado.
+ *@DESC: FIXME: Tiene un bug en el cual la deserializacion del int queda mal,
+ *@DESC: y esto proboca que el mensaje tambien quede corrido 2 posiciones.
  */
-//void* deserializar_mensajes(t_buffer* buffer, int tipo_mensaje){
-//
-//	switch(buffer.header.id_tipo){
-//	case 1:
-//		t_mensaje1 msj1 = malloc(t_mensaje1);
-//
-//		//Serializar int
-//		deserializar_int(msj1.valor1, &buffer.data);
-//
-//		//Serializo string
-//		memcpy(buffer.data+sizeof(msj1.valor2),&msj1.valor2,sizeof(msj1.valor2));
-//
-//		break;
-//	case 2:
-//		t_mensaje2 msj2 = (t_mensaje2) data;
-//		buffer.header.tamanio = sizeof(t_header)+sizeof(t_mensaje2);
-//		buffer.data = malloc(buffer.header.tamanio);
-//
-//		//Agrego el encabezado en la estructura de datos
-//		memcpy(&buffer->data,&buffer.header,sizeof(t_header));
-//
-//		//Serializar int
-//		serializar_int(msj2.valor1, &buffer.data);
-//		serializar_int(msj2.valor2, &buffer.data);
-//
-//		break;
-//	default:
-//		buffer.header.tamanio = -1;
-//		return buffer;
-//	}
-//}
+void* deserializar_mensaje(t_buffer buffer){
 
-//int32_t deserializar_int(char** buffer_data){
-//	int32_t valor = (int32_t) ntohl(valor);
-//	memcpy(&valor,buffer_data,sizeof(uint32_t));
-//}
+	switch(buffer.header.id_tipo){
+	case 1:
+		printf("Inicio deserializacion");
+		t_mensaje1* mensaje;
+		mensaje = malloc(sizeof(t_mensaje1));
 
-//Para testear
+		memcpy(&mensaje->valor1, &buffer.data+sizeof(t_header), sizeof(mensaje->valor1));
+		memcpy(&mensaje->valor2, &buffer.data+sizeof(t_header)+sizeof(mensaje->valor1), sizeof(mensaje->valor2));
+
+		uint32_t network_to_host = ntohl(mensaje->valor1);
+		mensaje->valor1 = network_to_host;
+
+		return mensaje;
+	default:
+		return mensaje;
+	}
+}
+
+//PARA TEST
 //#include <sys/types.h>
 //#include <sys/socket.h>
 //#include <netdb.h>
@@ -299,12 +262,12 @@ t_buffer serializar_mensajes(void* data, t_buffer buffer){
 //
 //typedef struct __attribute__((__packed__ )){
 //	t_header header;
-//	int32_t socket; /*Creo que es util tenerlo, pero despues vemos si es necesario*/
+//	uint32_t socket; /*Creo que es util tenerlo, pero despues vemos si es necesario*/
 //	void* data;
 //} t_buffer;
 //
 //typedef struct{
-//	int valor1;
+//	uint32_t valor1;
 //	char valor2[30];
 //} t_mensaje1;
 //
@@ -317,39 +280,69 @@ t_buffer serializar_mensajes(void* data, t_buffer buffer){
 //
 //	switch(buffer.header.id_tipo){
 //	case 1:
-//		buffer.header.tamanio = sizeof(t_header)+sizeof(t_mensaje1);
+//		printf("Inicio serializacion");
 //		buffer.data = malloc(buffer.header.tamanio);
 //
-//		t_mensaje1* msj1 = (t_mensaje1*) data;
+//		t_mensaje1* mensaje = (struct t_mensaje1*) data;
 //
 //		//Agrego el encabezado en la estructura de datos
-//		memcpy(buffer.data,&buffer.header,sizeof(t_header));
+//		memcpy(&buffer.data, &buffer.header, sizeof(buffer.header));
 //
 //		//Serializar int
-//		uint32_t valor = htonl(msj1->valor1);
-//		memcpy(buffer.data+sizeof(t_header),&valor,sizeof(uint32_t));
+//		uint32_t host_to_network = htonl(mensaje->valor1);
+//		memcpy(&buffer.data+sizeof(t_header), &host_to_network, sizeof(mensaje->valor1));
 //
 //		//Serializo string
-//		memcpy(buffer.data+sizeof(t_header)+sizeof(msj1.valor2),&msj1.valor2,sizeof(msj1.valor2));
+//		memcpy(&buffer.data+sizeof(t_header)+sizeof(mensaje->valor1), &mensaje->valor2, sizeof(mensaje->valor2));
 //
-//		break;
+//		return buffer;
 //	default:
 //		buffer.header.tamanio = -1;
 //		return buffer;
 //	}
 //}
 //
+//void* deserializar_mensaje(t_buffer buffer){
+//
+//	switch(buffer.header.id_tipo){
+//	case 1:
+//		printf("Inicio deserializacion");
+//		t_mensaje1* mensaje;
+//		mensaje = malloc(sizeof(t_mensaje1));
+//
+//		memcpy(&mensaje->valor1, &buffer.data+sizeof(t_header), sizeof(mensaje->valor1));
+//		memcpy(&mensaje->valor2, &buffer.data+sizeof(t_header)+sizeof(mensaje->valor1), sizeof(mensaje->valor2));
+//
+//		uint32_t network_to_host = ntohl(mensaje->valor1);
+//		mensaje->valor1 = network_to_host;
+//
+//		return mensaje;
+//	default:
+//		return mensaje;
+//	}
+//}
+//
 //int main(){
-//	t_header header;
-//	header.id_tipo = 1;
-//	header.tamanio = -1;
+//
 //	t_buffer buffer;
-//	buffer.header = header;
-//	char cadena[30] = "Hola Mundo";
+//	buffer.header.id_tipo = 1;
+//	buffer.header.tamanio = sizeof(t_header)+sizeof(t_mensaje1);
+//	buffer.socket = 1;
+////	buffer.data = malloc(buffer.header.tamanio);
 //
-//	t_mensaje1* mensaje = malloc(sizeof(t_mensaje1));
-//	mensaje->valor1 = 15;
-//	strcpy(mensaje->valor2, cadena);
+//	t_mensaje1 mensaje;
+//	mensaje.valor1 = 10;
+//	char cadena[30] = "abcdefghijklmnopqrstuvwxyz1234\0";
+//	strcpy(mensaje.valor2, cadena);
 //
-//	serializar_mensajes(mensaje, buffer);
+//	printf("Antes de serializar val1=%d y val2=%s\n",mensaje.valor1,mensaje.valor2);
+//
+//	buffer = serializar_mensajes(&mensaje, buffer);
+//
+//	printf("Ya serializé\n");
+//
+//	t_mensaje1* mensaje1_2;
+//	mensaje1_2 = deserializar_mensaje(buffer);
+//
+//	printf("Luego de deserializar val1=%d y val2=%s\n",mensaje1_2->valor1,mensaje1_2->valor2);
 //}
