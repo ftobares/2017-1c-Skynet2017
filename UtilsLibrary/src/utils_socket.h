@@ -51,6 +51,6 @@ int enviar_mensaje(t_header header, t_buffer buffer);
 
 t_buffer serializar_mensajes(void* data, t_buffer buffer);
 
-void* deserializar_mensaje(t_buffer buffer);
+void* deserializar_mensaje(t_buffer buffer, int id_tipo);
 
 #endif /* SRC_UTILS_SOCKET_H_ */
