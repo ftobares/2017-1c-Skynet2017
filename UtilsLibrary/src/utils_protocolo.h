@@ -14,12 +14,14 @@
  * el protocolo */
 typedef struct{
 	int valor1;
-	char valor2[30];
+	char* valor2;
 } t_mensaje1;
 
 typedef struct{
 	int valor1;
 	int valor2;
 } t_mensaje2;
+
+int calcular_tamanio_mensaje(void* p_mensaje, int tipo_mensaje);
 
 #endif /* SRC_UTILS_PROTOCOLO_H_ */
