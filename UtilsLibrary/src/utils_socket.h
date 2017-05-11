@@ -9,6 +9,9 @@
 #define SRC_UTILS_SOCKET_H_
 
 #include <stdbool.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 //Estructuras genericas
 typedef struct {
@@ -27,9 +30,9 @@ typedef struct __attribute__((__packed__ )){
 } t_header;
 
 typedef struct __attribute__((__packed__ )){
-	int32_t id_tipo;
+	t_header header;
 	int32_t socket; /*Creo que es util tenerlo, pero despues vemos si es necesario*/
-	void* data;
+	char* data;
 } t_buffer;
 
 //Funciones
@@ -43,10 +46,16 @@ t_socket conectar_a_otro_servidor(char* ip, char* puerto);
 
 t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt, int conexiones_maximas);
 
-t_buffer* crear_buffer(uint32_t id, uint32_t un_socket, void* data);
+t_buffer* crear_buffer(int32_t tipo_mensaje, int32_t size, int32_t un_socket);
 
-t_buffer* recibir_mensaje(int32_t un_socket);
+void destruir_buffer(t_buffer* buffer);
 
-int enviar_mensaje(t_header header, t_buffer buffer);
+t_buffer recibir_mensaje(int32_t un_socket);
+
+int enviar_mensaje(void* data, int tipo_mensaje, int size, int un_socket);
+
+t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_socket);
+
+void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje);
 
 #endif /* SRC_UTILS_SOCKET_H_ */

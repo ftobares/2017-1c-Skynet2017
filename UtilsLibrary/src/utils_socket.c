@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <string.h>
 #include "utils_socket.h"
+#include "utils_protocolo.h"
 
 /*@NAME: crear_socket_cliente
  *@DESC: Recibe dos strings, uno para la IP y otro para el PUERTO.
@@ -134,57 +135,159 @@ t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt,
 
 /*@NAME: crear_buffer
  *@DESC: Crea un buffer a partir de los datos enviados
- *@DESC: (Faltaria agregar la serializacion - capaz cambie algo)
  */
-t_buffer* crear_buffer(uint32_t id, uint32_t un_socket, void* data) {
+t_buffer* crear_buffer(int32_t tipo_mensaje, int32_t size, int32_t un_socket) {
 	t_buffer* buffer_temp = malloc(sizeof(t_buffer));
-	buffer_temp->id_tipo = id;
+	t_header header;
+	header.id_tipo = tipo_mensaje;
+	header.tamanio = size;
+	buffer_temp->header = header;
 	buffer_temp->socket = un_socket;
-	buffer_temp->data = data;
-	return &buffer_temp;
+	buffer_temp->data = malloc(header.tamanio);
+	return buffer_temp;
+}
+
+/*@NAME: destruir_buffer
+ *@DESC: Libera un buffer
+ */
+void destruir_buffer(t_buffer* buffer) {
+	free(buffer->data);
+	free(buffer);
 }
 
 /*@NAME: recibir_mensaje
  *@DESC: Recibe datos y los guarda en el buffer
- *@DESC: (Falta la serializacion - seguro algo va a cambiar)
+ *@DESC: tener en cuenta que hay que deserializar el buffer.data
  */
-t_buffer* recibir_mensaje(int32_t un_socket) {
+t_buffer recibir_mensaje(int32_t un_socket) {
 
 	t_buffer buffer;
 	buffer.socket = un_socket;
-	t_header header;
-	header.tamanio = -1;
+	buffer.header.tamanio = 0;
+	buffer.header.id_tipo = 0;
+	buffer.data = malloc(sizeof(t_header));
 
 	// Recibir datos y guardarlos en el buffer
 	// Primero recibo el header para saber tipo de mensaje y tamaño
-	if (recv(buffer.socket, &header, sizeof(header), MSG_WAITALL) == -1) {
-		buffer.id_tipo = 0;
+	if (recv(buffer.socket, &buffer.data, sizeof(t_header), MSG_WAITALL) == -1) {
+		buffer.header.id_tipo = 0;
 		perror("Error al recibir header");
-		return &buffer;
+		return buffer;
 	}
+	t_header* header = deserializar_mensaje(buffer.data,buffer.header.id_tipo);
+	buffer.header.id_tipo = header->id_tipo;
+	buffer.header.tamanio = header->tamanio;
 
 	// Segundo recervar memoria suficiente para el mensaje
-	buffer.data = malloc(header.tamanio);
-	if (read(buffer.socket, buffer.data, header.tamanio) == -1) {
-		buffer.id_tipo = 0;
+	memset(buffer.data, 0, sizeof(t_header));
+	buffer.data = realloc(buffer.data, buffer.header.tamanio);
+	if (read(buffer.socket, &buffer.data, buffer.header.tamanio) == -1) {
+		buffer.header.id_tipo = 0;
 		free(buffer.data);
 		perror("Error al recibir el payload");
 	}
 
-	return &buffer;
+	return buffer;
 }
 
 /*@NAME: enviar_mensaje
  *@DESC: Envia datos cargados en el buffer
- *@DESC: (Falta la serializacion - seguro algo va a cambiar)
+ *@DESC: Datos ya deben venir serializados
  *@RETURN: Devuelve 1-fallo/false , 0-exito/truel
  */
-int enviar_mensaje(t_header header, t_buffer buffer) {
-	if (send(buffer.socket, &header, sizeof(header), 0) > 0) {
-		if (write(buffer.socket, buffer.data, header.tamanio) > 0) {
-			return 0;
-		}
+int enviar_mensaje(void* data, int tipo_mensaje, int size, int un_socket) {
+
+	t_buffer* buffer = serializar_mensajes(&data, tipo_mensaje, size, un_socket);
+
+	if (send(buffer->socket, &buffer->data, sizeof(buffer->header.tamanio), 0) > 0) {
+		return 0;
 	}
 	perror("Error al Enviar Datos\n");
 	return 1;
+}
+
+/*@NAME: serializar_mensajes
+ *@DESC: La funcion pone en el buffer todos los datos a ser enviados,
+ *@DESC: header y mensaje. Luego se serializan segun el tipo de dato.
+ *@DESC: Datos de ingreso:
+ *@DESC: 	data-> struct del mensaje
+ *@DESC: 	buffer-> struct t_buffer creado anteriormente
+ */
+t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_socket) {
+	int offset = 0;
+	t_buffer* buffer = crear_buffer(tipo_mensaje, size, un_socket);
+
+	switch(buffer->header.id_tipo){
+	case 1:
+		printf("Inicio serializacion \n");
+		//Casteo la data al tipo de struct del mensaje
+		t_mensaje1* mensaje = (struct t_mensaje1*) data;
+
+		//Agrego el encabezado en la estructura de datos
+		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
+		offset += sizeof(buffer->header);
+
+		//Agrego el mensaje
+//		int32_t host_to_network = htonl(mensaje->valor1);
+		memcpy(buffer->data + offset, &mensaje->valor1, sizeof(int32_t));
+		offset += sizeof(int32_t);
+
+		memcpy(buffer->data + offset, mensaje->valor2, strlen(mensaje->valor2)+1);
+
+		return buffer;
+	default:
+		return buffer;
+	}
+}
+
+/*@NAME: deserializar_mensaje (
+ *@DESC: La funcion deserializa un stream de datos poniendolo
+ *@DESC: en un struct segun el tipo de mensaje. Devuelve ese
+ *@DESC: struct cargado.
+ *@DESC: FIXME: Tiene un bug en el cual la deserializacion del int queda mal,
+ *@DESC: y esto proboca que el mensaje tambien quede corrido 2 posiciones.
+ */
+void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
+	int offset = 0;
+
+	switch(tipo_mensaje){
+	case 0:
+		printf("Inicio deserializacion header \n");
+		printf("Alloco %d memoria \n",sizeof(t_header));
+		t_header* header = malloc(sizeof(t_header));
+		header->id_tipo = 0;
+		header->tamanio = 0;
+
+		printf("Copio en header->id_tipo <= %p \n", stream_buffer);
+		memcpy(&header->id_tipo, stream_buffer, sizeof(header->id_tipo));
+		offset += sizeof(header->id_tipo);
+
+		printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
+		memcpy(&header->tamanio, stream_buffer + offset, sizeof(header->tamanio));
+
+		return header;
+	case 1:
+		printf("Inicio deserializacion mensaje 1\n");
+		printf("Alloco %d memoria \n",sizeof(t_mensaje1));
+		t_mensaje1* mensaje = malloc(sizeof(t_mensaje1));
+		mensaje->valor1 = 0;
+
+		offset += sizeof(t_header);
+
+		printf("Copio en mensaje->valor1 <= %p \n", stream_buffer + offset);
+		memcpy(&mensaje->valor1, stream_buffer + offset, sizeof(mensaje->valor1));
+//		uint32_t network_to_host = ntohl(mensaje->valor1);
+//		mensaje->valor1 = network_to_host;
+		offset += sizeof(mensaje->valor1);
+		printf("Mensaje->valor1 <= %d \n",mensaje->valor1);
+
+		printf("Copio en mensaje->valor2 <= %p \n", stream_buffer + offset);
+		char* valor2 = strdup(stream_buffer + offset);
+		mensaje->valor2 = valor2;
+		printf("Mensaje->valor2 <= %s \n",mensaje->valor2);
+
+		return mensaje;
+	default:
+		return NULL;
+	}
 }
