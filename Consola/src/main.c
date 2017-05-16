@@ -42,7 +42,7 @@ int Enviar(int sRemoto, char * buffer)
   int cantBytes;
   cantBytes = send(sRemoto, buffer, strlen(buffer), 0);
   if (cantBytes == -1)
-    perror("ERROR ENVIO DATOS.\n");
+    printf("ERROR ENVIO DATOS.\n");
   return cantBytes;
 }
 
@@ -51,7 +51,7 @@ int Recibir(int sRemoto, char * buffer)
   int bytecount;
   memset(buffer, 0, BUFFERSIZE);
   if ((bytecount = recv(sRemoto, buffer, BUFFERSIZE, 0)) == -1)
-    perror("ERROR RECIBO DATOS. \n");
+	printf("ERROR RECIBO DATOS. \n");
 
   return bytecount;
 }
@@ -60,7 +60,7 @@ int saludar(int handshake, int tipo, int sRemoto) {
 
 	char *respuesta = malloc(BUFFERSIZE * sizeof(char));
 	char *mensaje = string_new();
-	string_append(&mensaje, "X");
+	string_append(&mensaje, "C");
 	string_append(&mensaje, string_itoa(handshake));
 	string_append(&mensaje, string_itoa(tipo));
 	int aux;
@@ -70,7 +70,7 @@ int saludar(int handshake, int tipo, int sRemoto) {
 
 	if (!(string_starts_with(respuesta, OK)))
 	{
-		perror("ERROR: HANDSHAKE NO FUE EXITOSO \n");
+		printf("ERROR: HANDSHAKE NO FUE EXITOSO \n");
 	}
 	else
 		aux = 0;
@@ -125,7 +125,7 @@ void conectar_al_kernel() {
 	} else {
 
 		close(server_socket.socket);
-		perror("HANDSHAKE ERROR - No se pudo conectar al KERNEL");
+		printf("HANDSHAKE ERROR - No se pudo conectar al KERNEL");
 		return;
 	}
 }
