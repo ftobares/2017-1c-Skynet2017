@@ -198,12 +198,13 @@ int iniciar_servidor() {
 					int j;
 					mensaje[valorLectura] = '\0';
 					tipo_mensaje = mensaje[0];
-					printf("MENSAJE: %s\n", mensaje);
+					//printf("MENSAJE: %s\n", mensaje);
 					switch (tipo_mensaje) {
 					case MSJ_HANDSHAKE_CPU:
 						if(mensaje[1] == HANDSHAKE_CPU)
 							EnviarDatos(sd, MSJ_CONFIRMACION);
 						else
+							puts("NEGACION");
 							EnviarDatos(sd, MSJ_NEGACION);
 						break;
 					case MSJ_HANDSHAKE_CONSOLA:
@@ -247,7 +248,7 @@ int iniciar_servidor() {
 					}
 
 				} else {
-					printf("recv error \n");
+					printf("No hay datos - recv error \n");
 				}
 			}
 		}

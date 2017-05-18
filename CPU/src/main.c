@@ -22,7 +22,7 @@
 t_cpu_config* config;
 t_socket server_socket;
 int CONECTADOALKERNEL = 0;
-int AUX_CONEC_KER = 0;
+int AUX_CONEC_KER;
 
 //Declaracion de funciones
 void conectar_al_kernel();
@@ -45,7 +45,7 @@ int Enviar(int sRemoto, char * buffer)
   int cantBytes;
   cantBytes = send(sRemoto, buffer, strlen(buffer), 0);
   if (cantBytes == -1)
-    perror("ERROR ENVIO DATOS.\n");
+    printf("ERROR ENVIO DATOS.\n");
   return cantBytes;
 }
 
@@ -54,7 +54,7 @@ int Recibir(int sRemoto, char * buffer)
   int bytecount;
   memset(buffer, 0, BUFFERSIZE);
   if ((bytecount = recv(sRemoto, buffer, BUFFERSIZE, 0)) == -1)
-    perror("ERROR RECIBO DATOS. \n");
+	printf("ERROR RECIBO DATOS. \n");
 
   return bytecount;
 }
@@ -66,24 +66,24 @@ int saludar(int handshake, int tipo, int sRemoto) {
 	string_append(&mensaje, "H");
 	string_append(&mensaje, string_itoa(handshake));
 	string_append(&mensaje, string_itoa(tipo));
-	int aux;
+	int saludo = -1;
 
 	Enviar(sRemoto, mensaje);
 	Recibir(sRemoto, respuesta);
 
 	if (!(string_starts_with(respuesta, OK)))
 	{
-		perror("ERROR: HANDSHAKE NO FUE EXITOSO \n");
+		printf("ERROR: HANDSHAKE NO FUE EXITOSO \n");
 	}
 	else
-		aux = 0;
+		saludo = 0;
 
 	if (mensaje != NULL)
 		free(mensaje);
 	if (respuesta != NULL)
 		free(respuesta);
 
-	return aux;
+	return saludo;
 }
 
 void conectar_al_kernel() {
@@ -123,8 +123,9 @@ void conectar_al_kernel() {
 				printf("Error en recv() \n");
 			}
 		}
-	}
+	} else {
 
-	close(server_socket.socket);
-	return;
+		close(server_socket.socket);
+		return;
+	}
 }
