@@ -27,12 +27,12 @@ typedef struct{
 
 typedef struct{
 	int nro_marco;
-	pid_t pid; //proceso al que pertenece la pagina
+	int pid; //proceso al que pertenece la pagina
 	int nro_pagina; //orden de la pagina del proceso
 } t_pagina;
 
 typedef struct{
-	pid_t pid;
+	int pid;
 	int * paginas_asignadas;
 	int cantidad_paginas;
 } t_entrada_programa;
@@ -47,7 +47,7 @@ typedef struct{
 } t_memoria;
 
 typedef struct{
-	pid_t pid;
+	int pid;
 	int nro_pagina;
 	void * contenido_pagina; //el tipo está bien?
 } t_entrada_cache;
@@ -60,16 +60,37 @@ void almacenar_bytes_en_una_pagina(t_memoria * memoria, int nro_pagina, int offs
 
 void * devolver_pagina(t_memoria * memoria, int nro_pagina);
 
-void * inicializar_programa(t_memoria * memoria, pid_t pid, int paginas_requeridas);
+void * inicializar_programa(t_memoria * memoria, int pid, int paginas_requeridas);
 
-void asignar_pagina(t_memoria * memoria, pid_t pid, int posicion_tabla, int nro_pagina);
+void asignar_pagina(t_memoria * memoria, int pid, int posicion_tabla, int nro_pagina);
 
 void liberar_pagina(t_memoria * memoria, int posicion_tabla);
 
-void finalizar_programa(t_memoria * memoria, pid_t pid);
+void liberar_pagina_cacheada(t_entrada_cache * cache, int posicion_tabla);
+
+void finalizar_programa(t_memoria * memoria, t_entrada_cache * cache, int pid, int entradas_cache);
 
 t_entrada_cache * new_cache(int entradas_cache, int marco_size);
 
 void reemplazo_pagina(t_pagina pagina, t_entrada_cache * cache, t_memoria * memoria);
+
+bool pertenece_al_programa(t_entrada_programa * entrada_programa, int pid);
+
+void test();
+
+void test_cache();
+
+//nuevas funciones
+void consola();
+int obtener_comando_consola(char * comando);
+void consola_comando_help();
+void consola_comando_retardo();
+void consola_comando_dump_cache();
+void consola_comando_dump_estructuras_memoria();
+void consola_comando_dump_contenido_memoria();
+void consola_comando_flush();
+void consola_comando_size_memory();
+void consola_comando_size_pid();
+bool es_igual_a_pid(int pid, t_entrada_programa * entrada_programa);
 
 #endif /* SRC_UTILS_MEMORIA_H_ */
