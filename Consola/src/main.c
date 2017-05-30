@@ -109,14 +109,13 @@ int hilo_lector_interfaz_usuario(){
 
 			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = 1;
-			sem_post(&sem_hay_instruccion);
 			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
 			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
 			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 			char** str_separado = string_n_split(mensaje, 3, " ");
 			path_archivo_a_enviar = str_separado[1];
 			printf("El path es %s \n", path_archivo_a_enviar);
-
+			sem_post(&sem_hay_instruccion);
 			sem_post(&sem_tipo_operacion);
 			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
 			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
