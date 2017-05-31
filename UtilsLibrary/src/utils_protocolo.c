@@ -25,6 +25,11 @@ int calcular_tamanio_mensaje(void* p_mensaje, int tipo_mensaje) {
 		t_mensaje2* mensaje2 = (struct t_mensaje2*) p_mensaje;
 		int size_2 = sizeof(t_header)+sizeof(mensaje2->valor1)+sizeof(mensaje2->valor2);
 		return size_2;
+	case 3:
+		printf("Handshake");
+		t_handshake* handshake = (struct t_handshake*) p_mensaje;
+		int size_3 = sizeof(t_header)+strlen(handshake->handshake)+1;
+		return size_3;
 	default:
 		return 0;
 	}

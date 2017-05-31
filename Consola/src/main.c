@@ -9,6 +9,7 @@
 #include <string.h>
 #include <src/utils_config.h>
 #include <src/utils_socket.h>
+#include <src/utils_protocolo.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
@@ -16,7 +17,7 @@
 #define PACKAGESIZE 1024
 #define TIPO_PROYECTO 1
 #define BUFFERSIZE 40000
-#define HSKERNEL     2 //HANDSHAKE
+#define HSKERNEL     3 //HANDSHAKE
 #define TOCPUKERNEL  3 //TIPO
 #define OK 	"1"
 #define INICIAR "iniciar_programa"
@@ -31,8 +32,8 @@ t_console_config* config;
 //int CONECTADOALKERNEL = 0;
 sem_t sem_tipo_operacion;
 sem_t sem_hay_instruccion;
-sem_t sem_buffer;
 sem_t sem_primera_ejecucion;
+sem_t sem_mutex_escritura_lectura;
 int tipo_operacion = 0;
 char* path_archivo_a_enviar;
 int primera_ejecucion = 1;
@@ -58,11 +59,11 @@ int main(int argc, char* argv) {
 
 	sem_init(&sem_tipo_operacion, 0, 1);
 	sem_init(&sem_hay_instruccion, 0, 0);
-	sem_init(&sem_buffer, 0, 1);
 	sem_init(&sem_primera_ejecucion, 0, 1);
-	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
+	sem_init(&sem_mutex_escritura_lectura, 0, 1);
+//	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
+//	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
+//	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 
 	//Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)
 	pthread_attr_init(&thread_usuario_attr);
@@ -75,14 +76,14 @@ int main(int argc, char* argv) {
 	pthread_join(thread_usuario_id, NULL);
 	pthread_join(thread_programa_id, NULL);
 
-	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
+//	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
+//	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
+//	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 
 	sem_destroy(&sem_tipo_operacion);
 	sem_destroy(&sem_hay_instruccion);
-	sem_destroy(&sem_buffer);
 	sem_destroy(&sem_primera_ejecucion);
+	sem_destroy(&sem_mutex_escritura_lectura);
 
 	return 0;
 }
@@ -99,27 +100,28 @@ int hilo_lector_interfaz_usuario(){
 		printf("Consola iniciada ingrese la operación que desea realizar, exit para salir:\n");
 
 		//Espero por ingreso de instrucciones
+
 		fgets(mensaje, 100, stdin);
 
 		if(strncmp(mensaje, INICIAR, strlen(INICIAR)) == 0){
 
-			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
+//			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
+//			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
+//			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 
 			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = 1;
-			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
+//			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
+//			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
+//			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 			char** str_separado = string_n_split(mensaje, 3, " ");
 			path_archivo_a_enviar = str_separado[1];
 			printf("El path es %s \n", path_archivo_a_enviar);
 			sem_post(&sem_hay_instruccion);
 			sem_post(&sem_tipo_operacion);
-			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
+//			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
+//			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
+//			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 
 		} else if (strncmp(mensaje, FINALIZAR, strlen(FINALIZAR)) == 0) {
 			tipo_operacion = 2;
@@ -141,7 +143,6 @@ int hilo_escritor_interfaz_usuario(){
 
 	printf("Inicio hilo_escritor_interfaz_usuario \n");
 
-	sem_wait(&sem_buffer);
 	struct timespec tim, tim2;
 	tim.tv_sec = 1;
 	tim.tv_nsec = 500;
@@ -151,9 +152,9 @@ int hilo_escritor_interfaz_usuario(){
 		if(nanosleep(&tim , &tim2) < 0 ) {
 		      printf("Nano sleep system call failed \n");
 		}
-//		printf("Recibiendo datos de proceso %i\n",i);
+
+		printf("Recibiendo datos de proceso %i\n",i);
 	}
-	sem_post(&sem_buffer);
 
 	printf("Fin hilo_escritor_interfaz_usuario \n");
 
@@ -168,7 +169,7 @@ void hilo_manager_programa() {
 	while(true){
 
 		sem_wait(&sem_hay_instruccion);
-		printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
+//		printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
 
 		switch(tipo_operacion){
 		case 1:
@@ -246,7 +247,7 @@ void hilo_procesar_operacion(void* tipo_operacion){
 		}
 
 		//HandShake CONSOLA -> KERNEL
-		if (AUX_CONEC_KER == saludar(HSKERNEL, TOCPUKERNEL, server_socket.socket)) {
+		if (AUX_CONEC_KER == saludar(server_socket.socket)) {
 			printf("Handshake Exitoso! \n");
 		}
 
@@ -294,48 +295,63 @@ void hilo_procesar_operacion(void* tipo_operacion){
 	printf("Fin hilo_procesar_operacion \n");
 }
 
-int Enviar(int sRemoto, char * buffer)
-{
-  int cantBytes;
-  cantBytes = send(sRemoto, buffer, strlen(buffer), 0);
-  if (cantBytes == -1)
-    printf("ERROR ENVIO DATOS.\n");
-  return cantBytes;
-}
+//int Enviar(int sRemoto, char * buffer)
+//{
+//  int cantBytes;
+//  cantBytes = send(sRemoto, buffer, strlen(buffer), 0);
+//  if (cantBytes == -1)
+//    printf("ERROR ENVIO DATOS.\n");
+//  return cantBytes;
+//}
+//
+//int Recibir(int sRemoto, char * buffer)
+//{
+//  int bytecount;
+//  memset(buffer, 0, BUFFERSIZE);
+//  if ((bytecount = recv(sRemoto, buffer, BUFFERSIZE, 0)) == -1)
+//	printf("ERROR RECIBO DATOS. \n");
+//
+//  return bytecount;
+//}
 
-int Recibir(int sRemoto, char * buffer)
-{
-  int bytecount;
-  memset(buffer, 0, BUFFERSIZE);
-  if ((bytecount = recv(sRemoto, buffer, BUFFERSIZE, 0)) == -1)
-	printf("ERROR RECIBO DATOS. \n");
+int saludar(int sRemoto) {
 
-  return bytecount;
-}
-
-int saludar(int handshake, int tipo, int sRemoto) {
-
-	char *respuesta = malloc(BUFFERSIZE * sizeof(char));
-	char *mensaje = string_new();
-	string_append(&mensaje, "C");
-	string_append(&mensaje, string_itoa(handshake));
-	string_append(&mensaje, string_itoa(tipo));
+//	char *respuesta = malloc(BUFFERSIZE * sizeof(char));
+//	char *mensaje = string_new();
+//	string_append(&mensaje, "C");
+//	string_append(&mensaje, string_itoa(handshake));
+//	string_append(&mensaje, string_itoa(tipo));
 	int aux;
 
-	Enviar(sRemoto, mensaje);
-	Recibir(sRemoto, respuesta);
+	t_handshake handshake_message;
+	handshake_message.handshake = string_new();
+	string_append(&handshake_message.handshake, "C");
+	int size_mensaje = calcular_tamanio_mensaje(&handshake_message, HSKERNEL);
 
-	if (!(string_starts_with(respuesta, OK)))
+	if(enviar_mensaje(&handshake_message, HSKERNEL, size_mensaje, sRemoto) == 1){
+		perror("Fallo el envio del mensaje handshake con Kernel");
+	}
+//	Enviar(sRemoto, mensaje);
+//	Recibir(sRemoto, respuesta);
+
+	t_buffer buffer;
+	buffer = recibir_mensaje(sRemoto);
+
+	if(buffer.header.id_tipo == 3){
+		realloc(handshake_message.handshake, buffer.header.tamanio);
+		memset(&handshake_message, 0, buffer.header.tamanio);
+		handshake_message.handshake = deserializar_mensaje(buffer.data, 3);
+	}
+
+	if (!(string_starts_with(handshake_message.handshake, OK)))
 	{
 		printf("ERROR: HANDSHAKE NO FUE EXITOSO \n");
 	}
 	else
 		aux = 0;
 
-	if (mensaje != NULL)
-		free(mensaje);
-	if (respuesta != NULL)
-		free(respuesta);
+	free(handshake_message.handshake);
+	free(buffer.data);
 
 	return aux;
 }

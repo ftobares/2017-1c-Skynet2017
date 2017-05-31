@@ -22,6 +22,13 @@ typedef struct{
 	int valor2;
 } t_mensaje2;
 
+/**
+ * Tipo mensaje = 3
+ **/
+typedef struct{
+	char* handshake;
+} t_handshake;
+
 int calcular_tamanio_mensaje(void* p_mensaje, int tipo_mensaje);
 
 #endif /* SRC_UTILS_PROTOCOLO_H_ */

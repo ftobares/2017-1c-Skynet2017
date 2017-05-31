@@ -193,7 +193,7 @@ t_buffer recibir_mensaje(int32_t un_socket) {
 /*@NAME: enviar_mensaje
  *@DESC: Envia datos cargados en el buffer
  *@DESC: Datos ya deben venir serializados
- *@RETURN: Devuelve 1-fallo/false , 0-exito/truel
+ *@RETURN: Devuelve 1-fallo/false , 0-exito/true
  */
 int enviar_mensaje(void* data, int tipo_mensaje, int size, int un_socket) {
 
