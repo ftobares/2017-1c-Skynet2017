@@ -108,6 +108,7 @@ int iniciar_servidor() {
 	int opt = TRUE;
 	int addrlen, new_socket, cliente_socket[CantClientes], max_clientes =
 	CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
+	t_buffer buffer;
 	int max_sd;
 
 	fd_set readfds;
@@ -178,8 +179,10 @@ int iniciar_servidor() {
 		//Caso contrario, alguna operacion E/S en algun otro socket
 		for (i = 0; i < max_clientes; i++) {
 			sd = cliente_socket[i];
+			clean_or_init_buffer(&buffer);
 			if (FD_ISSET(sd, &readfds)) {
-				valorLectura = recv(sd, mensaje, PACKAGESIZE, 0);
+//				valorLectura = recv(sd, mensaje, PACKAGESIZE, 0);
+				buffer = recibir_mensaje(sd);
 
 				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
 				if (valorLectura == 0) {
@@ -193,8 +196,7 @@ int iniciar_servidor() {
 					//Cerrar el socket y marcar como 0 en la lista para reusar
 					close(sd);
 					cliente_socket[i] = 0;
-				}
-				if (valorLectura > 0) {
+				} else if (valorLectura > 0) {
 					int j;
 					mensaje[valorLectura] = '\0';
 					tipo_mensaje = mensaje[0];

@@ -291,3 +291,14 @@ void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
 		return NULL;
 	}
 }
+
+void clean_or_init_buffer(t_buffer* buffer){
+	buffer->socket = -1;
+	if(buffer->header.tamanio > 0){
+		memset(buffer->data, 0, buffer->header.tamanio);
+	}else{
+		memset(buffer->data, 0, sizeof(t_buffer));
+	}
+	buffer->header.id_tipo = -1;
+	buffer->header.tamanio = 0;
+}

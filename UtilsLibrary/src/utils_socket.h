@@ -109,4 +109,9 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
  */
 void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje);
 
+/*@NAME: clean_or_init_buffer (
+ *@DESC: Funcion para limpiar inicializar o limpiar basura del buffer
+ */
+void clean_or_init_buffer(t_buffer* buffer);
+
 #endif /* SRC_UTILS_SOCKET_H_ */
