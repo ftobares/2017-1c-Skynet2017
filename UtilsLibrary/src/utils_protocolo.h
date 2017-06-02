@@ -8,6 +8,8 @@
 #ifndef SRC_UTILS_PROTOCOLO_H_
 #define SRC_UTILS_PROTOCOLO_H_
 
+#include <stdio.h>
+
 //Estructuras para cada mensaje
 
 /* Estructuras genericas, modificar y agregar cuando definamos
@@ -22,12 +24,14 @@ typedef struct{
 	int valor2;
 } t_mensaje2;
 
-/**
- * Tipo mensaje = 3
- **/
 typedef struct{
 	char* handshake;
 } t_handshake;
+
+typedef struct{
+	int pid;
+	char* contenido;
+} t_programa_ansisop;
 
 int calcular_tamanio_mensaje(void* p_mensaje, int tipo_mensaje);
 

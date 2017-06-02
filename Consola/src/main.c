@@ -13,12 +13,14 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #define PACKAGESIZE 1024
 #define TIPO_PROYECTO 1
 #define BUFFERSIZE 40000
 #define HSKERNEL     3 //HANDSHAKE
 #define TOCPUKERNEL  3 //TIPO
+#define MSJ_FILE_CODE 4
 #define OK 	"1"
 #define INICIAR "iniciar_programa"
 #define FINALIZAR "finalizar_programa"
@@ -34,6 +36,7 @@ sem_t sem_tipo_operacion;
 sem_t sem_hay_instruccion;
 sem_t sem_primera_ejecucion;
 sem_t sem_mutex_escritura_lectura;
+sem_t sem_path_archivo;
 int tipo_operacion = 0;
 char* path_archivo_a_enviar;
 int primera_ejecucion = 1;
@@ -44,6 +47,8 @@ int hilo_lector_interfaz_usuario();
 void hilo_manager_programa();
 void hilo_procesar_operacion(void* tipo_operacion);
 int hilo_escritor_interfaz_usuario();
+int enviar_codigo();
+t_programa_ansisop* crear_y_cargar_archivo(char* path);
 
 int main(int argc, char* argv) {
 
@@ -95,6 +100,7 @@ int hilo_lector_interfaz_usuario(){
 //	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
 //	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 	char mensaje[100];
+	sem_init(&sem_path_archivo, 0, 1);
 
 	while(true){
 		printf("Consola iniciada ingrese la operación que desea realizar, exit para salir:\n");
@@ -114,6 +120,7 @@ int hilo_lector_interfaz_usuario(){
 //			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
 //			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
 //			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
+			sem_wait(&sem_path_archivo);
 			char** str_separado = string_n_split(mensaje, 3, " ");
 			path_archivo_a_enviar = str_separado[1];
 			printf("El path es %s \n", path_archivo_a_enviar);
@@ -135,13 +142,17 @@ int hilo_lector_interfaz_usuario(){
 			return 1;
 		}
 	}
+
+	sem_destroy(&sem_path_archivo);
 	printf("Fin hilo_lector_interfaz_usuario \n");
 	return 0;
 }
 
-int hilo_escritor_interfaz_usuario(){
+int hilo_escritor_interfaz_usuario(void* pid){
 
 	printf("Inicio hilo_escritor_interfaz_usuario \n");
+
+	int v_pid = (int)pid;
 
 	struct timespec tim, tim2;
 	tim.tv_sec = 1;
@@ -153,7 +164,7 @@ int hilo_escritor_interfaz_usuario(){
 		      printf("Nano sleep system call failed \n");
 		}
 
-		printf("Recibiendo datos de proceso %i\n",i);
+		printf("Recibiendo datos de proceso pid=%d iteracion n°%i\n",v_pid, i);
 	}
 
 	printf("Fin hilo_escritor_interfaz_usuario \n");
@@ -221,6 +232,8 @@ void hilo_procesar_operacion(void* tipo_operacion){
 		pthread_t th_iniciar_proceso_id;
 		pthread_attr_t th_iniciar_proceso_attr;
 		t_socket server_socket;
+		char* path = path_archivo_a_enviar;
+		sem_post(&sem_path_archivo);
 
 		if(primera_ejecucion == 1){
 			primera_ejecucion = 0; //Analizar si hace falta un semaforo (ya definido como sem_primera_ejecucion
@@ -257,11 +270,16 @@ void hilo_procesar_operacion(void* tipo_operacion){
 				server_socket.socket_info->ai_addrlen);
 
 		freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
-//		printf("CONECTADO AL KERNEL: %d", CONECTADOALKERNEL);
+		printf("CONECTADO AL KERNEL: %d", server_socket.socket);
+
+		int v_pid = enviar_codigo(server_socket.socket, path);
+		if(v_pid == -1){
+			perror("Fallo el envio del codigo al Kernel");
+		}
 
 //		if (CONECTADOALKERNEL) {
 //			int enviar = 1;
-			char message[23] = "hilo_procesar_operacion";
+//			char message[23] = "hilo_procesar_operacion";
 //			printf(
 //					"Conectado al servidor. Ya puede enviar mensajes. Escriba 'exit' para salir\n");
 //			while (enviar) {
@@ -269,7 +287,7 @@ void hilo_procesar_operacion(void* tipo_operacion){
 //				if (!strcmp(message, "exit\n"))
 //					enviar = 0; // Chequeo que el usuario no quiera salir
 //				if (enviar)
-					send(server_socket.socket, message, strlen(message) + 1, 0); // Solo envio si el usuario no quiere salir.
+//					send(server_socket.socket, message, strlen(message) + 1, 0); // Solo envio si el usuario no quiere salir.
 //			}
 //
 //		} else {
@@ -284,7 +302,7 @@ void hilo_procesar_operacion(void* tipo_operacion){
 
 		//crear hilo de espera por mensajes proceso e imprimir por pantalla
 		pthread_attr_init(&th_iniciar_proceso_attr);
-		pthread_create(&th_iniciar_proceso_id, &th_iniciar_proceso_attr, &hilo_escritor_interfaz_usuario, NULL);
+		pthread_create(&th_iniciar_proceso_id, &th_iniciar_proceso_attr, &hilo_escritor_interfaz_usuario, v_pid);
 		break;
 	case 2:
 		printf("hilo_procesar_operacion tipo_operacion=%i\n",v_tipo_operacion);
@@ -337,10 +355,12 @@ int saludar(int sRemoto) {
 	t_buffer buffer;
 	buffer = recibir_mensaje(sRemoto);
 
-	if(buffer.header.id_tipo == 3){
+	if(buffer.header.id_tipo == HSKERNEL){
 		realloc(handshake_message.handshake, buffer.header.tamanio);
 		memset(&handshake_message, 0, buffer.header.tamanio);
-		handshake_message.handshake = deserializar_mensaje(buffer.data, 3);
+		handshake_message.handshake = deserializar_mensaje(buffer.data, HSKERNEL);
+	}else{
+		perror("Error al recibir OK del Kernel, tipo mensaje incorrecto");
 	}
 
 	if (!(string_starts_with(handshake_message.handshake, OK)))
@@ -354,6 +374,60 @@ int saludar(int sRemoto) {
 	free(buffer.data);
 
 	return aux;
+}
+
+t_programa_ansisop* crear_y_cargar_archivo(char* path){
+	FILE* file = fopen(path, "r");
+
+	if (file == NULL) {
+		return NULL;
+	}
+
+	struct stat stat_file;
+	stat(path, &stat_file);
+
+	t_programa_ansisop* archivo = malloc(sizeof(t_programa_ansisop));
+
+	archivo->contenido = calloc(1, stat_file.st_size + 1);
+
+	fread(archivo->contenido, stat_file.st_size, 1, file);
+
+	if (strstr(archivo->contenido, "\r\n")) {
+		printf("\n\crear_y_cargar_archivo - WARNING: the file %s contains a \\r\\n sequence "
+		 "- the Windows new line sequence. The \\r characters will remain as part "
+		 "of the value, as Unix newlines consist of a single \\n. You can install "
+		 "and use `dos2unix` program to convert your files to Unix style.\n\n", path);
+	}
+
+	fclose(file);
+
+	return archivo;
+}
+
+int enviar_codigo(int socket, char* path){
+
+	/* Crear el archivo y cargarlo con el programa*/
+	t_programa_ansisop* archivo = crear_y_cargar_archivo(path);
+	archivo->pid = -1;
+	int size_mensaje = calcular_tamanio_mensaje(archivo, HSKERNEL);
+
+	/* Enviar el programa al Kernel, para crear el proceso*/
+	if(enviar_mensaje(archivo, MSJ_FILE_CODE, size_mensaje, socket) == 1){
+		perror("Fallo envio del archivo al Kernel");
+	}
+
+	/* Recibir el PID del proceso creado*/
+	t_buffer buffer;
+	buffer = recibir_mensaje(socket);
+
+	/* Deserializo mensaje */
+	if(buffer.header.id_tipo == MSJ_FILE_CODE){
+		archivo->pid = deserializar_mensaje(buffer.data, MSJ_FILE_CODE);
+	}else{
+		perror("Error al recibir PID del proceso creado por el Kernel, tipo mensaje incorrecto");
+	}
+
+	return archivo->pid;
 }
 
 //void conectar_al_kernel() {
