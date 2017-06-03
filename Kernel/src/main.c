@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h> //Solo para numero random BORRAR CUANDO NO SE USE!
 #include <commons/config.h>
 #include <commons/string.h>
 #include <commons/collections/list.h>
@@ -12,6 +13,7 @@
 #include <arpa/inet.h> //inet_addr
 #include <src/utils_config.h>
 #include <src/utils_socket.h>
+#include <src/utils_protocolo.h>
 
 #define BACKLOG 30	// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
@@ -19,12 +21,12 @@
 #define FALSE 0
 #define CantClientes 30
 #define TIPO_PROYECTO 4
-#define MSJ_HANDSHAKE_CPU 'H'
-#define MSJ_HANDSHAKE_CONSOLA 'C'
+#define MSJ_HANDSHAKE 3
+#define MSJ_PROGRAMA_ANSISOP 4
 #define MSJ_CONFIRMACION "1"
 #define MSJ_NEGACION     "0"
-#define HANDSHAKE_CPU '1'
-#define HANDSHAKE_CONSOLA '2'
+#define HANDSHAKE_CPU 'H'
+#define HANDSHAKE_CONSOLA 'C'
 //Variables Globales
 t_kernel_config* config;
 t_socket socket_memoria;
@@ -82,13 +84,16 @@ int main(int argc, char** argv) {
 	return v_valor_retorno;
 }
 
-int EnviarDatos(int socket, void *buffer) {
+void enviar_respuesta_handshake(int socket, void *buffer) {
 	int bytecount;
+	t_handshake temp_handshake;
+	temp_handshake.handshake = string_new();
+	string_append(temp_handshake.handshake, buffer);
+	int size_mensaje = calcular_tamanio_mensaje(temp_handshake.handshake, MSJ_HANDSHAKE);
 
-	if ((bytecount = send(socket, buffer, strlen(buffer), 0)) == -1)
+	if(enviar_mensaje(&temp_handshake, MSJ_HANDSHAKE, size_mensaje, socket) == 1){
 		perror("No puedo enviar información al/los cliente/s");
-
-	return bytecount;
+	}
 }
 
 void inicializarPCB(PCB* auxPCB) {
@@ -185,7 +190,7 @@ int iniciar_servidor() {
 				buffer = recibir_mensaje(sd);
 
 				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
-				if (valorLectura == 0) {
+				if (buffer.header.tamanio == 0) {
 					//Alguien se desconecto, obtenemos los detalles e imprimimos
 					getpeername(sd,
 							(struct sockaddr*) &master_socket.socket_info,
@@ -196,27 +201,47 @@ int iniciar_servidor() {
 					//Cerrar el socket y marcar como 0 en la lista para reusar
 					close(sd);
 					cliente_socket[i] = 0;
-				} else if (valorLectura > 0) {
+				} else if (buffer.header.tamanio > 0) {
 					int j;
-					mensaje[valorLectura] = '\0';
-					tipo_mensaje = mensaje[0];
+//					mensaje[valorLectura] = '\0';
+//					tipo_mensaje = mensaje[0];
 					//printf("MENSAJE: %s\n", mensaje);
-					switch (tipo_mensaje) {
-					case MSJ_HANDSHAKE_CPU:
-						if(mensaje[1] == HANDSHAKE_CPU)
-							EnviarDatos(sd, MSJ_CONFIRMACION);
-						else
-							puts("NEGACION");
-							EnviarDatos(sd, MSJ_NEGACION);
-						break;
-					case MSJ_HANDSHAKE_CONSOLA:
-						if(mensaje[1] == HANDSHAKE_CONSOLA)
-						{
+					switch (buffer.header.id_tipo) {
+					case MSJ_HANDSHAKE:
+						printf("Ingreso mensaje handshake");
+						t_handshake* v_handshake = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
+						if(string_contains(v_handshake->handshake,HANDSHAKE_CPU)){
+							puts("ENTRE CON LA CPU");
+							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
+						}else if(string_contains(v_handshake->handshake,HANDSHAKE_CONSOLA)){
 							puts("ENTRE CON LA CONSOLA");
-							EnviarDatos(sd, MSJ_CONFIRMACION);
+							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
+						}else{
+							puts("NEGACION");
+							enviar_respuesta_handshake(sd, MSJ_NEGACION);
 						}
-						else
-							EnviarDatos(sd, MSJ_NEGACION);
+						free(v_handshake);
+						break;
+					case MSJ_PROGRAMA_ANSISOP:
+						printf("Ingreso mensaje programa AnsiSOp",buffer.header.id_tipo);
+						/* Aca se supone que leo el codigo que me enviaron y creo el proceso*/
+						//Deserializo mensaje buffer.data
+						//creo el proceso
+
+						t_programa_ansisop programa_ansisop;
+
+						/* Inicio simulacion de valor random para el PID a devolver */
+						srand(time(NULL));
+						int pid_random = rand();
+						programa_ansisop.pid = pid_random;
+						/* Fin simulacion */
+
+						int size_mensaje = calcular_tamanio_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP);
+
+						if(enviar_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP, size_mensaje, sd) == 1){
+							perror("Fallo el envio del PID a la Consola");
+						}
+
 					break;
 
 					default:

@@ -96,16 +96,16 @@ int enviar_mensaje(void* data, int tipo_mensaje, int size, int un_socket);
  *@DESC: header y mensaje. Luego se serializan segun el tipo de dato.
  *@DESC: Datos de ingreso:
  *@DESC: 	data-> struct del mensaje
- *@DESC: 	buffer-> struct t_buffer creado anteriormente
+ *@DESC: 	tipo_mensaje-> mensaje segun protocolo
+ *@DESC: 	size-> tamaño del archivo
+ *@DESC: 	un_socket-> socket de conexion
  */
 t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_socket);
 
 /*@NAME: deserializar_mensaje (
  *@DESC: La funcion deserializa un stream de datos poniendolo
- *@DESC: en un struct segun el tipo de mensaje. Devuelve ese
- *@DESC: struct cargado.
- *@DESC: FIXME: Tiene un bug en el cual la deserializacion del int queda mal,
- *@DESC: y esto proboca que el mensaje tambien quede corrido 2 posiciones.
+ *@DESC: en un struct segun el tipo de mensaje. Devuelve un
+ *@DESC: puntero a ese struct cargado.
  */
 void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje);
 
