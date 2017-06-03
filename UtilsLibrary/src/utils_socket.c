@@ -227,7 +227,7 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
 
 	switch(buffer->header.id_tipo){
 	case 1:
-		printf("Inicio serializacion \n");
+		printf("Inicio serializacion mensaje 1 \n");
 		//Casteo la data al tipo de struct del mensaje
 		t_mensaje1* mensaje = (struct t_mensaje1*) data;
 
@@ -243,6 +243,30 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
 		memcpy(buffer->data + offset, mensaje->valor2, strlen(mensaje->valor2)+1);
 
 		return buffer;
+	case 2:
+		printf("Inicio serializacion mensaje 2 \n");
+		return buffer;
+	case 3:
+		printf("Inicio serializacion handshake \n");
+		t_handshake* handshake = (struct t_handshake*) data;
+
+		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
+		offset += sizeof(buffer->header);
+
+		memcpy(buffer->data + offset, handshake->handshake, strlen(handshake->handshake)+1);
+
+		return buffer;
+	case 4:
+		printf("Inicio serializacion programa ansisop \n");
+		t_programa_ansisop* programa_ansisop = (struct t_programa_ansisop*) data;
+
+		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
+		offset += sizeof(buffer->header);
+
+		memcpy(buffer->data + offset, programa_ansisop->contenido, strlen(programa_ansisop->contenido)+1);
+
+		return buffer;
+
 	default:
 		return buffer;
 	}
@@ -293,6 +317,32 @@ void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
 		printf("Mensaje->valor2 <= %s \n",mensaje->valor2);
 
 		return mensaje;
+	case 2:
+		printf("Inicio deserializacion mensaje 2\n");
+		t_mensaje2* mensaje2;
+		return mensaje;
+	case 3:
+		printf("Inicio deserializacion handshake 2\n");
+		t_handshake* handshake = malloc(sizeof(t_handshake));
+
+		offset += sizeof(t_header);
+
+		handshake->handshake = strdup(stream_buffer + offset);
+
+		return handshake;
+	case 4:
+		printf("Inicio deserializacion programa ansisop 2\n");
+		t_programa_ansisop* programa_ansisop = malloc(sizeof(t_programa_ansisop));
+
+		offset += sizeof(t_header);
+
+		memcpy(&programa_ansisop->pid, stream_buffer + offset, sizeof(programa_ansisop->pid));
+		offset += sizeof(programa_ansisop->pid);
+
+		programa_ansisop->contenido = strdup(stream_buffer + offset);
+
+		return programa_ansisop;
+
 	default:
 		return NULL;
 	}
@@ -300,11 +350,6 @@ void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
 
 void clean_or_init_buffer(t_buffer* buffer){
 	buffer->socket = -1;
-	if(buffer->header.tamanio > 0){
-		memset(buffer->data, 0, buffer->header.tamanio);
-	}else{
-		memset(buffer->data, 0, sizeof(t_buffer));
-	}
 	buffer->header.id_tipo = -1;
 	buffer->header.tamanio = 0;
 }

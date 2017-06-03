@@ -112,14 +112,14 @@ void inicializarPCB(PCB* auxPCB) {
 int iniciar_servidor() {
 	int opt = TRUE;
 	int addrlen, new_socket, cliente_socket[CantClientes], max_clientes =
-	CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
+	CantClientes, actividad, i, /*valorLectura,*/ sd /*, read_size*/;
 	t_buffer buffer;
 	int max_sd;
 
 	fd_set readfds;
 
-	char mensaje[PACKAGESIZE];
-	char tipo_mensaje;
+	//char mensaje[PACKAGESIZE];
+	//char tipo_mensaje;
 	//Conectarse a la Memoria
 	socket_memoria = conectar_a_otro_servidor(config->ipMemoria,
 			config->puertoMemoria);
@@ -246,29 +246,29 @@ int iniciar_servidor() {
 
 					default:
 						/* send to everyone! */
-						for (j = 0; j <= max_sd; j++) {
-							// except the listener and ourselves
-							if (cliente_socket[j] != sd
-									&& cliente_socket[j] != 0) {
-								if (send(cliente_socket[j], mensaje,
-										strlen(mensaje), 0) == -1) {
-									perror("send() error!");
-								} else {
-									printf(
-											"Mensaje enviado con el socket %d \n",
-											cliente_socket[j]);
-								}
-							}
-						}
-						if (send(socket_memoria.socket, mensaje,
-								strlen(mensaje), 0) != strlen(mensaje)) {
-							perror("send memoria failed");
-						}
-						if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
-								!= strlen(mensaje)) {
-							perror("send filesystem failed");
-						}
-						printf("valor lectura: %d\n", valorLectura);
+//						for (j = 0; j <= max_sd; j++) {
+//							// except the listener and ourselves
+//							if (cliente_socket[j] != sd
+//									&& cliente_socket[j] != 0) {
+//								if (send(cliente_socket[j], mensaje,
+//										strlen(mensaje), 0) == -1) {
+//									perror("send() error!");
+//								} else {
+//									printf(
+//											"Mensaje enviado con el socket %d \n",
+//											cliente_socket[j]);
+//								}
+//							}
+//						}
+//						if (send(socket_memoria.socket, mensaje,
+//								strlen(mensaje), 0) != strlen(mensaje)) {
+//							perror("send memoria failed");
+//						}
+//						if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
+//								!= strlen(mensaje)) {
+//							perror("send filesystem failed");
+//						}
+						printf("valor lectura: %d\n", buffer.header.id_tipo);
 						puts(
 								"mensajes a memoria y filesystem enviados correctamente");
 						break;
