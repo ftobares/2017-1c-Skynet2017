@@ -89,16 +89,16 @@ void* cargar_configuracion(char* path_archivo, int /*t_tipo_de_proyecto*/ tipo_p
 		config_destroy(config);
 		return kernel_config;
 	case 5:
-//	case MEMEORIA:
+//	case MEMORIA:
 		memoria_config = malloc(sizeof(t_memoria_config));
 		memoria_config->puerto = config_get_int_value(config,"PUERTO");
 		memoria_config->marcos = config_get_int_value(config,"MARCOS");
 		memoria_config->marcosSize = config_get_int_value(config,"MARCO_SIZE");
 		memoria_config->entradasCache = config_get_int_value(config,"ENTRADAS_CACHE");
 		memoria_config->cacheXProc = config_get_int_value(config,"CACHE_X_PROC");
-		memoria_config->reemplazoCache = config_get_string_value(config,"REEMPLAZO_CACHE");
+		memoria_config->reemplazoCache = strdup(config_get_string_value(config,"REEMPLAZO_CACHE"));
 		memoria_config->retardoMemoria = config_get_int_value(config,"RETARDO_MEMORIA");
-		//config_destroy(config);
+		config_destroy(config);
 		return memoria_config;
 	default:
 		printf("ERROR: Tipo de proyecto no valido");
