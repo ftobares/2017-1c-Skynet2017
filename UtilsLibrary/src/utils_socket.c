@@ -169,15 +169,15 @@ t_buffer recibir_mensaje(int32_t un_socket) {
 
 	// Recibir datos y guardarlos en el buffer
 	// Primero recibo el header para saber tipo de mensaje y tamaño
-	int bytes_retorno = recv(buffer.socket, &buffer.data, sizeof(t_header), MSG_WAITALL);
+	int bytes_retorno = recv(buffer.socket, buffer.data, sizeof(t_header), MSG_WAITALL);
 	if (bytes_retorno == -1) {
 		buffer.header.id_tipo = -1;
-		perror("Error al recibir header");
+		perror("Error al recibir header\n");
 		return buffer;
 	}else if(bytes_retorno == 0){
 		buffer.header.tamanio = 0;
 		buffer.header.id_tipo = 0;
-		printf("Se desconecto el socket=%d",buffer.socket);
+		printf("Se desconecto el socket=%d\n",buffer.socket);
 		return buffer;
 	}
 	t_header* header = deserializar_mensaje(buffer.data,buffer.header.id_tipo);
@@ -187,10 +187,10 @@ t_buffer recibir_mensaje(int32_t un_socket) {
 	// Segundo recervar memoria suficiente para el mensaje
 	memset(buffer.data, 0, sizeof(t_header));
 	buffer.data = realloc(buffer.data, buffer.header.tamanio);
-	if (read(buffer.socket, &buffer.data, buffer.header.tamanio) == -1) {
+	if (read(buffer.socket, buffer.data, buffer.header.tamanio) == -1) {
 		buffer.header.id_tipo = 0;
 		free(buffer.data);
-		perror("Error al recibir el payload");
+		perror("Error al recibir el payload\n");
 	}
 
 	return buffer;
@@ -231,13 +231,17 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
 		//Casteo la data al tipo de struct del mensaje
 		t_mensaje1* mensaje = (struct t_mensaje1*) data;
 
+		//Host to Network
+		buffer->header.id_tipo = htonl(buffer->header.id_tipo);
+		buffer->header.tamanio = htonl(buffer->header.tamanio);
+
 		//Agrego el encabezado en la estructura de datos
 		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
 		offset += sizeof(buffer->header);
 
 		//Agrego el mensaje
-//		int32_t host_to_network = htonl(mensaje->valor1);
-		memcpy(buffer->data + offset, &mensaje->valor1, sizeof(int32_t));
+		int32_t host_to_network = htonl(mensaje->valor1);
+		memcpy(buffer->data + offset, &host_to_network, sizeof(int32_t));
 		offset += sizeof(int32_t);
 
 		memcpy(buffer->data + offset, mensaje->valor2, strlen(mensaje->valor2)+1);
@@ -250,6 +254,10 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
 		printf("Inicio serializacion handshake \n");
 		t_handshake* handshake = (struct t_handshake*) data;
 
+		//Host to Network
+		buffer->header.id_tipo = htonl(buffer->header.id_tipo);
+		buffer->header.tamanio = htonl(buffer->header.tamanio);
+
 		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
 		offset += sizeof(buffer->header);
 
@@ -259,6 +267,10 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
 	case 4:
 		printf("Inicio serializacion programa ansisop \n");
 		t_programa_ansisop* programa_ansisop = (struct t_programa_ansisop*) data;
+
+		//Host to Network
+		buffer->header.id_tipo = htonl(buffer->header.id_tipo);
+		buffer->header.tamanio = htonl(buffer->header.tamanio);
 
 		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
 		offset += sizeof(buffer->header);
@@ -295,6 +307,10 @@ void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
 		printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
 		memcpy(&header->tamanio, stream_buffer + offset, sizeof(header->tamanio));
 
+		//Network_to_Host
+		header->id_tipo = ntohl(header->id_tipo);
+		header->tamanio = ntohl(header->tamanio);
+
 		return header;
 	case 1:
 		printf("Inicio deserializacion mensaje 1\n");
@@ -310,6 +326,9 @@ void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
 //		mensaje->valor1 = network_to_host;
 		offset += sizeof(mensaje->valor1);
 		printf("Mensaje->valor1 <= %d \n",mensaje->valor1);
+
+		//Network_to_Host
+		mensaje->valor1 = ntohl(mensaje->valor1);
 
 		printf("Copio en mensaje->valor2 <= %p \n", stream_buffer + offset);
 		char* valor2 = strdup(stream_buffer + offset);
@@ -338,6 +357,9 @@ void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
 
 		memcpy(&programa_ansisop->pid, stream_buffer + offset, sizeof(programa_ansisop->pid));
 		offset += sizeof(programa_ansisop->pid);
+
+		//Network_to_Host
+		programa_ansisop->pid = ntohl(programa_ansisop->pid);
 
 		programa_ansisop->contenido = strdup(stream_buffer + offset);
 

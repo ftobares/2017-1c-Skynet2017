@@ -208,22 +208,22 @@ int iniciar_servidor() {
 					//printf("MENSAJE: %s\n", mensaje);
 					switch (buffer.header.id_tipo) {
 					case MSJ_HANDSHAKE:
-						printf("Ingreso mensaje handshake");
+						printf("Ingreso mensaje handshake\n");
 						t_handshake* v_handshake = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
 						if(string_contains(v_handshake->handshake,HANDSHAKE_CPU)){
-							puts("ENTRE CON LA CPU");
+							puts("ENTRE CON LA CPU\n");
 							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
 						}else if(string_contains(v_handshake->handshake,HANDSHAKE_CONSOLA)){
-							puts("ENTRE CON LA CONSOLA");
+							puts("ENTRE CON LA CONSOLA\n");
 							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
 						}else{
-							puts("NEGACION");
+							puts("NEGACION\n");
 							enviar_respuesta_handshake(sd, MSJ_NEGACION);
 						}
 						free(v_handshake);
 						break;
 					case MSJ_PROGRAMA_ANSISOP:
-						printf("Ingreso mensaje programa AnsiSOp",buffer.header.id_tipo);
+						printf("Ingreso mensaje programa AnsiSOp\n",buffer.header.id_tipo);
 						/* Aca se supone que leo el codigo que me enviaron y creo el proceso*/
 						//Deserializo mensaje buffer.data
 						//creo el proceso
@@ -239,7 +239,7 @@ int iniciar_servidor() {
 						int size_mensaje = calcular_tamanio_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP);
 
 						if(enviar_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP, size_mensaje, sd) == 1){
-							perror("Fallo el envio del PID a la Consola");
+							perror("Fallo el envio del PID a la Consola\n");
 						}
 
 					break;
@@ -270,7 +270,7 @@ int iniciar_servidor() {
 //						}
 						printf("valor lectura: %d\n", buffer.header.id_tipo);
 						puts(
-								"mensajes a memoria y filesystem enviados correctamente");
+								"mensajes a memoria y filesystem enviados correctamente\n");
 						break;
 					}
 
