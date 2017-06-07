@@ -11,6 +11,10 @@
 #include <stdio.h>
 
 //Estructuras para cada mensaje
+#define MSJ_HEADER 1
+#define MSJ_HANDSHAKE 2
+#define MSJ_PROGRAMA_ANSISOP 3
+#define MSJ_PCB 4
 
 /* Estructuras genericas, modificar y agregar cuando definamos
  * el protocolo */

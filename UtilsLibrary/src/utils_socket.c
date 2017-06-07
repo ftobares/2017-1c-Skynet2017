@@ -136,7 +136,7 @@ t_master_socket servidor_crear_socket_bind_and_listen(uint32_t puerto, uint32_t 
 /*@NAME: crear_buffer
  *@DESC: Crea un buffer a partir de los datos enviados
  */
-t_buffer* crear_buffer(int32_t tipo_mensaje, int32_t size, int32_t un_socket) {
+t_buffer* crear_buffer(uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket) {
 	t_buffer* buffer_temp = malloc(sizeof(t_buffer));
 	t_header header;
 	header.id_tipo = tipo_mensaje;
@@ -203,7 +203,7 @@ t_buffer recibir_mensaje(uint32_t un_socket) {
  */
 int enviar_mensaje(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket) {
 
-	t_buffer* buffer = serializar_mensajes(&data, tipo_mensaje, size, un_socket);
+	t_buffer* buffer = serializar_mensajes(data, tipo_mensaje, size, un_socket);
 
 	if (send(buffer->socket, &buffer->data, sizeof(buffer->header.tamanio), 0) > 0) {
 		return 0;

@@ -13,10 +13,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-uint32_t MSJ_HEADER = 1;
-uint32_t MSJ_HANDSHAKE = 2;
-uint32_t MSJ_PROGRAMA_ANSISOP = 3;
-uint32_t MSJ_PCB = 4;
+#define MSJ_HEADER 1
+#define MSJ_HANDSHAKE 2
+#define MSJ_PROGRAMA_ANSISOP 3
+#define MSJ_PCB 4
 
 //Estructuras genericas
 typedef struct {
