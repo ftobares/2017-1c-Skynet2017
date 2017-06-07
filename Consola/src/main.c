@@ -18,9 +18,9 @@
 #define PACKAGESIZE 1024
 #define TIPO_PROYECTO 1
 #define BUFFERSIZE 40000
-#define HSKERNEL     3 //HANDSHAKE
+#define HSKERNEL     2 //HANDSHAKE
 #define TOCPUKERNEL  3 //TIPO
-#define MSJ_FILE_CODE 4
+#define MSJ_FILE_CODE 3
 #define OK 	"1"
 #define INICIAR "iniciar_programa"
 #define FINALIZAR "finalizar_programa"
@@ -408,7 +408,7 @@ int enviar_codigo(int socket, char* path){
 
 	/* Crear el archivo y cargarlo con el programa*/
 	t_programa_ansisop* archivo = crear_y_cargar_archivo(path);
-	archivo->pid = -1;
+	archivo->pid = 0;
 	int size_mensaje = calcular_tamanio_mensaje(archivo, HSKERNEL);
 
 	/* Enviar el programa al Kernel, para crear el proceso*/
