@@ -9,6 +9,7 @@
 #define SRC_UTILS_PROTOCOLO_H_
 
 #include <stdio.h>
+#include <stdint.h>
 
 //Estructuras para cada mensaje
 #define MSJ_HEADER 1
@@ -24,10 +25,10 @@ typedef struct{
 } t_handshake;
 
 typedef struct{
-	int pid;
+	uint32_t pid;
 	char* contenido;
 } t_programa_ansisop;
 
-int calcular_tamanio_mensaje(void* p_mensaje, int tipo_mensaje);
+uint32_t calcular_tamanio_mensaje(void* p_mensaje, uint32_t tipo_mensaje);
 
 #endif /* SRC_UTILS_PROTOCOLO_H_ */

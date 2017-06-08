@@ -223,6 +223,8 @@ int enviar_mensaje(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un
  */
 t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket) {
 	uint32_t offset = 0;
+	uint32_t id_tipo;
+	uint32_t tamanio;
 	t_buffer* buffer = crear_buffer(tipo_mensaje, size, un_socket);
 
 	switch(buffer->header.id_tipo){
@@ -231,11 +233,14 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 		t_handshake* handshake = (struct t_handshake*) data;
 
 		//Host to Network
-		buffer->header.id_tipo = htons(buffer->header.id_tipo);
-		buffer->header.tamanio = htons(buffer->header.tamanio);
+		id_tipo = htons(buffer->header.id_tipo);
+		tamanio = htons(buffer->header.tamanio);
 
-		memcpy(buffer->data, &buffer->header, sizeof(buffer->header));
-		offset += sizeof(buffer->header);
+		memcpy(buffer->data, &id_tipo, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &tamanio, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
 
 		memcpy(buffer->data + offset, handshake->handshake, strlen(handshake->handshake));
 
@@ -245,16 +250,22 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 		t_programa_ansisop* programa_ansisop = (struct t_programa_ansisop*) data;
 
 		//Host to Network
-		buffer->header.id_tipo = htons(buffer->header.id_tipo);
-		buffer->header.tamanio = htons(buffer->header.tamanio);
+		id_tipo = htons(buffer->header.id_tipo);
+		tamanio = htons(buffer->header.tamanio);
+		uint32_t pid = htons(programa_ansisop->pid);
 
-		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
-		offset += sizeof(buffer->header);
+		memcpy(buffer->data, &id_tipo, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &tamanio, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &pid, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
 
 		memcpy(buffer->data + offset, programa_ansisop->contenido, strlen(programa_ansisop->contenido));
 
 		return buffer;
-
 	default:
 		return buffer;
 	}
@@ -276,12 +287,12 @@ void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
 		uint32_t id_tipo = 0;
 		uint32_t tamanio = 0;
 
-		printf("Copio en header->id_tipo <= %p \n", stream_buffer);
-		memcpy(&id_tipo, stream_buffer, sizeof(header->id_tipo));
-		offset += sizeof(header->id_tipo);
+		//printf("Copio en header->id_tipo <= %p \n", stream_buffer);
+		memcpy(&id_tipo, stream_buffer, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
 
-		printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
-		memcpy(&tamanio, stream_buffer + offset, sizeof(header->tamanio));
+		//printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
+		memcpy(&tamanio, stream_buffer + offset, sizeof(uint32_t));
 
 		//Network_to_Host
 		header->id_tipo = htons(id_tipo);
