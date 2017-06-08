@@ -14,7 +14,7 @@
 #include <src/utils_config.h>
 #include <src/utils_socket.h>
 #include <src/utils_protocolo.h>
-#include <parser/metadata_program.h>
+//#include <parser/metadata_program.h>
 
 #define BACKLOG 30	// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
@@ -42,10 +42,10 @@ typedef struct
 	int offsetFin;
 } indiceCodigo;
 
-typedef struct {
-	t_size etiqueta_size; // Tamaño del mapa serializado de etiquetas
-	char* etiqueta;  // La serializacion de las etiquetas
-} indiceEtiquetas;
+//typedef struct {
+//	t_size etiqueta_size; // Tamaño del mapa serializado de etiquetas
+//	char* etiqueta;  // La serializacion de las etiquetas
+//} indiceEtiquetas;
 
 typedef struct
 {
@@ -63,20 +63,20 @@ typedef struct
 
 } indiceStack;
 
-typedef struct {
-	uint32_t PID;
-	uint32_t PC;
-	uint32_t paginasCodigo;
-	uint32_t paginasStack;
-	uint32_t cantOperacIO;
-
-	t_size tamanioIndiceDeCodigo;
-	t_intructions* indiceDeCodigo;
-	indiceEtiquetas indiceDeEtiquetas;
-	uint32_t SP;
-	t_size tamanioIndiceStack;
-	t_list* indiceDeStack;
-} t_PCB;
+//typedef struct {
+//	uint32_t PID;
+//	uint32_t PC;
+//	uint32_t paginasCodigo;
+//	uint32_t paginasStack;
+//	uint32_t cantOperacIO;
+//
+//	t_size tamanioIndiceDeCodigo;
+//	t_intructions* indiceDeCodigo;
+//	indiceEtiquetas indiceDeEtiquetas;
+//	uint32_t SP;
+//	t_size tamanioIndiceStack;
+//	t_list* indiceDeStack;
+//} t_PCB;
 
 
 int main(int argc, char** argv) {
@@ -101,21 +101,21 @@ void enviar_respuesta_handshake(int socket, void *buffer) {
 	}
 }
 
-void inicializarPCB(int pID,char* codigoAnsisop) {
-	t_PCB* pcb=malloc(sizeof(t_PCB));
-			t_metadata_program* metaProg=metadata_desde_literal(codigoAnsisop);
-			pcb->PID=(uint32_t)pID;
-			pcb->PC=metaProg->instruccion_inicio;
-			pcb->indiceDeCodigo=metaProg->instrucciones_serializado;
-			pcb->tamanioIndiceDeCodigo=metaProg->instrucciones_size;
-			pcb->indiceDeEtiquetas.etiqueta=metaProg->etiquetas;
-			pcb->indiceDeEtiquetas.etiqueta_size=metaProg->etiquetas_size;
-			pcb->paginasCodigo=(obtenerCantPags(codigoAnsisop));
-			pcb->paginasStack=config->stackSize;
-			pcb->cantOperacIO=0;
-			pcb->SP=0;
-			pcb->tamanioIndiceStack=0;
-}
+//void inicializarPCB(int pID,char* codigoAnsisop) {
+//	t_PCB* pcb=malloc(sizeof(t_PCB));
+//			t_metadata_program* metaProg=metadata_desde_literal(codigoAnsisop);
+//			pcb->PID=(uint32_t)pID;
+//			pcb->PC=metaProg->instruccion_inicio;
+//			pcb->indiceDeCodigo=metaProg->instrucciones_serializado;
+//			pcb->tamanioIndiceDeCodigo=metaProg->instrucciones_size;
+//			pcb->indiceDeEtiquetas.etiqueta=metaProg->etiquetas;
+//			pcb->indiceDeEtiquetas.etiqueta_size=metaProg->etiquetas_size;
+//			pcb->paginasCodigo=(obtenerCantPags(codigoAnsisop));
+//			pcb->paginasStack=config->stackSize;
+//			pcb->cantOperacIO=0;
+//			pcb->SP=0;
+//			pcb->tamanioIndiceStack=0;
+//}
 
 
 int iniciar_servidor() {

@@ -231,13 +231,13 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 		t_handshake* handshake = (struct t_handshake*) data;
 
 		//Host to Network
-		buffer->header.id_tipo = htonl(buffer->header.id_tipo);
-		buffer->header.tamanio = htonl(buffer->header.tamanio);
+		buffer->header.id_tipo = htons(buffer->header.id_tipo);
+		buffer->header.tamanio = htons(buffer->header.tamanio);
 
-		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
+		memcpy(buffer->data, &buffer->header, sizeof(buffer->header));
 		offset += sizeof(buffer->header);
 
-		memcpy(buffer->data + offset, handshake->handshake, strlen(handshake->handshake)+1);
+		memcpy(buffer->data + offset, handshake->handshake, strlen(handshake->handshake));
 
 		return buffer;
 	case MSJ_PROGRAMA_ANSISOP:
@@ -245,13 +245,13 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 		t_programa_ansisop* programa_ansisop = (struct t_programa_ansisop*) data;
 
 		//Host to Network
-		buffer->header.id_tipo = htonl(buffer->header.id_tipo);
-		buffer->header.tamanio = htonl(buffer->header.tamanio);
+		buffer->header.id_tipo = htons(buffer->header.id_tipo);
+		buffer->header.tamanio = htons(buffer->header.tamanio);
 
 		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
 		offset += sizeof(buffer->header);
 
-		memcpy(buffer->data + offset, programa_ansisop->contenido, strlen(programa_ansisop->contenido)+1);
+		memcpy(buffer->data + offset, programa_ansisop->contenido, strlen(programa_ansisop->contenido));
 
 		return buffer;
 
@@ -273,19 +273,19 @@ void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
 		printf("Inicio deserializacion header \n");
 		printf("Alloco %d memoria \n",sizeof(t_header));
 		t_header* header = malloc(sizeof(t_header));
-		header->id_tipo = 0;
-		header->tamanio = 0;
+		uint32_t id_tipo = 0;
+		uint32_t tamanio = 0;
 
 		printf("Copio en header->id_tipo <= %p \n", stream_buffer);
-		memcpy(&header->id_tipo, stream_buffer, sizeof(header->id_tipo));
+		memcpy(&id_tipo, stream_buffer, sizeof(header->id_tipo));
 		offset += sizeof(header->id_tipo);
 
 		printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
-		memcpy(&header->tamanio, stream_buffer + offset, sizeof(header->tamanio));
+		memcpy(&tamanio, stream_buffer + offset, sizeof(header->tamanio));
 
 		//Network_to_Host
-		header->id_tipo = ntohl(header->id_tipo);
-		header->tamanio = ntohl(header->tamanio);
+		header->id_tipo = htons(id_tipo);
+		header->tamanio = htons(tamanio);
 
 		return header;
 	case MSJ_HANDSHAKE:
@@ -307,7 +307,7 @@ void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
 		offset += sizeof(programa_ansisop->pid);
 
 		//Network_to_Host
-		programa_ansisop->pid = ntohl(programa_ansisop->pid);
+		programa_ansisop->pid = htons(programa_ansisop->pid);
 
 		programa_ansisop->contenido = strdup(stream_buffer + offset);
 

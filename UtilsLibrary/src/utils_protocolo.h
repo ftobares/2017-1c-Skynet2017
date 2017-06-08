@@ -18,15 +18,6 @@
 
 /* Estructuras genericas, modificar y agregar cuando definamos
  * el protocolo */
-typedef struct{
-	int valor1;
-	char* valor2;
-} t_mensaje1;
-
-typedef struct{
-	int valor1;
-	int valor2;
-} t_mensaje2;
 
 typedef struct{
 	char* handshake;
