@@ -16,33 +16,32 @@
 #include <sys/stat.h>
 
 #define PACKAGESIZE 1024
+#define INPUTSIZE 100
 #define TIPO_PROYECTO 1
 #define BUFFERSIZE 40000
-#define HSKERNEL     2 //HANDSHAKE
-#define TOCPUKERNEL  3 //TIPO
-#define MSJ_FILE_CODE 3
-#define OK 	"1"
+#define MSJ_HEADER 1
+#define MSJ_HANDSHAKE 2
+#define MSJ_PROGRAMA_ANSISOP 3
+
 #define INICIAR "iniciar_programa"
 #define FINALIZAR "finalizar_programa"
 #define DESCONECTAR "desconectar_consola"
 #define LIMPIAR "limpiar_mensajes"
 #define SALIR "exit"
+#define OK "1"
 
-//Variables Globales
+/* Variables Globales */
 t_console_config* config;
-//t_socket server_socket;
-//int CONECTADOALKERNEL = 0;
 sem_t sem_tipo_operacion;
 sem_t sem_hay_instruccion;
 sem_t sem_primera_ejecucion;
-sem_t sem_mutex_escritura_lectura;
 sem_t sem_path_archivo;
 int tipo_operacion = 0;
 char* path_archivo_a_enviar;
+char* pid_proceso;
 int primera_ejecucion = 1;
 
-//Declaracion de funciones
-void conectar_al_kernel();
+/* Declaracion de funciones */
 int hilo_lector_interfaz_usuario();
 void hilo_manager_programa();
 void hilo_procesar_operacion(void* tipo_operacion);
@@ -54,41 +53,33 @@ int main(int argc, char* argv) {
 
 	printf("Inicio MAIN \n");
 
-	//Definir hilo interfaz usuario
+	/* Definir hilo interfaz usuario  */
 	pthread_t thread_usuario_id;
 	pthread_attr_t thread_usuario_attr;
 
-	//Definir hilo programa
+	/* Definir hilo programa  */
 	pthread_t thread_programa_id;
 	pthread_attr_t thread_programa_attr;
 
+	/* Inicializo semaforos  */
 	sem_init(&sem_tipo_operacion, 0, 1);
 	sem_init(&sem_hay_instruccion, 0, 0);
 	sem_init(&sem_primera_ejecucion, 0, 1);
-	sem_init(&sem_mutex_escritura_lectura, 0, 1);
-//	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-//	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-//	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 
-	//Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)
+	/* Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)  */
 	pthread_attr_init(&thread_usuario_attr);
 	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
 
-	//Creo un hilo encargado de manejar los hilos que realizan las operaciones (Programa)
+	/* Creo un hilo encargado de manejar los hilos que realizan las operaciones (Programa)  */
 	pthread_attr_init(&thread_programa_attr);
 	pthread_create(&thread_programa_id, &thread_programa_attr, &hilo_manager_programa, NULL);
 
 	pthread_join(thread_usuario_id, NULL);
 	pthread_join(thread_programa_id, NULL);
 
-//	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-//	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-//	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
-
 	sem_destroy(&sem_tipo_operacion);
 	sem_destroy(&sem_hay_instruccion);
 	sem_destroy(&sem_primera_ejecucion);
-	sem_destroy(&sem_mutex_escritura_lectura);
 
 	return 0;
 }
@@ -96,50 +87,55 @@ int main(int argc, char* argv) {
 /* FUNCIONES INTERFAZ */
 int hilo_lector_interfaz_usuario(){
 	printf("Inicio hilo_lector_interfaz_usuario \n");
-//	printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-//	printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-//	printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
-	char mensaje[100];
+
+	char mensaje[INPUTSIZE];
 	sem_init(&sem_path_archivo, 0, 1);
 
 	while(true){
 		printf("Consola iniciada ingrese la operación que desea realizar, exit para salir:\n");
 
-		//Espero por ingreso de instrucciones
-
+		/* Espero por ingreso de instrucciones  */
 		fgets(mensaje, 100, stdin);
 
 		if(strncmp(mensaje, INICIAR, strlen(INICIAR)) == 0){
 
-//			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-//			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-//			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
-
 			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = 1;
-//			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-//			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-//			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 			sem_wait(&sem_path_archivo);
 			char** str_separado = string_n_split(mensaje, 3, " ");
 			path_archivo_a_enviar = str_separado[1];
 			printf("El path es %s \n", path_archivo_a_enviar);
 			sem_post(&sem_hay_instruccion);
 			sem_post(&sem_tipo_operacion);
-//			printf("###DEBUG# sem_tipo_operacion %d \n",sem_tipo_operacion.__align);
-//			printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
-//			printf("###DEBUG# sem_buffer %d \n",sem_buffer.__align);
 
 		} else if (strncmp(mensaje, FINALIZAR, strlen(FINALIZAR)) == 0) {
+
+			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = 2;
+			sem_wait(&sem_path_archivo);
+			char** str_separado = string_n_split(mensaje, 3, " ");
+			pid_proceso = str_separado[1];
+			printf("El PID del proceso a finalizar es %s \n", pid_proceso);
+			sem_post(&sem_hay_instruccion);
+			sem_post(&sem_tipo_operacion);
+
 		} else if (strncmp(mensaje, DESCONECTAR, strlen(DESCONECTAR)) == 0){
+
+			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = 3;
+			sem_wait(&sem_path_archivo);
+			char** str_separado = string_n_split(mensaje, 3, " ");
+			pid_proceso = str_separado[1];
+			printf("El PID del proceso a finalizar es %s \n", pid_proceso);
+			sem_post(&sem_hay_instruccion);
+			sem_post(&sem_tipo_operacion);
+
 		} else if (strncmp(mensaje, LIMPIAR, strlen(LIMPIAR)) == 0) {
 			tipo_operacion = 4;
 		} else if (strncmp(mensaje, SALIR, strlen(SALIR)) == 0) {
 			return 0;
 		} else {
-			return 1;
+			printf("## ERROR ## Operacion no valida ## \n");
 		}
 	}
 
@@ -180,7 +176,6 @@ void hilo_manager_programa() {
 	while(true){
 
 		sem_wait(&sem_hay_instruccion);
-//		printf("###DEBUG# sem_hay_instruccion %d \n",sem_hay_instruccion.__align);
 
 		switch(tipo_operacion){
 		case 1:
@@ -277,26 +272,6 @@ void hilo_procesar_operacion(void* tipo_operacion){
 			perror("Fallo el envio del codigo al Kernel");
 		}
 
-//		if (CONECTADOALKERNEL) {
-//			int enviar = 1;
-//			char message[23] = "hilo_procesar_operacion";
-//			printf(
-//					"Conectado al servidor. Ya puede enviar mensajes. Escriba 'exit' para salir\n");
-//			while (enviar) {
-//				fgets(message, PACKAGESIZE, stdin); // Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
-//				if (!strcmp(message, "exit\n"))
-//					enviar = 0; // Chequeo que el usuario no quiera salir
-//				if (enviar)
-//					send(server_socket.socket, message, strlen(message) + 1, 0); // Solo envio si el usuario no quiere salir.
-//			}
-//
-//		} else {
-//
-//			close(server_socket.socket);
-//			printf("HANDSHAKE ERROR - No se pudo conectar al KERNEL");
-//			return;
-//		}
-
 		//recibir pid
 		printf("recibir pid de proceso\n");
 
@@ -334,31 +309,24 @@ void hilo_procesar_operacion(void* tipo_operacion){
 
 int saludar(int sRemoto) {
 
-//	char *respuesta = malloc(BUFFERSIZE * sizeof(char));
-//	char *mensaje = string_new();
-//	string_append(&mensaje, "C");
-//	string_append(&mensaje, string_itoa(handshake));
-//	string_append(&mensaje, string_itoa(tipo));
 	int aux;
 
 	t_handshake handshake_message;
 	handshake_message.handshake = string_new();
 	string_append(&handshake_message.handshake, "C");
-	int size_mensaje = calcular_tamanio_mensaje(&handshake_message, HSKERNEL);
+	int size_mensaje = calcular_tamanio_mensaje(&handshake_message, MSJ_HANDSHAKE);
 
-	if(enviar_mensaje(&handshake_message, HSKERNEL, size_mensaje, sRemoto) == 1){
+	if(enviar_mensaje(&handshake_message, MSJ_HANDSHAKE, size_mensaje, sRemoto) == 1){
 		perror("Fallo el envio del mensaje handshake con Kernel");
 	}
-//	Enviar(sRemoto, mensaje);
-//	Recibir(sRemoto, respuesta);
 
 	t_buffer buffer;
 	buffer = recibir_mensaje(sRemoto);
 
-	if(buffer.header.id_tipo == HSKERNEL){
+	if(buffer.header.id_tipo == MSJ_HANDSHAKE){
 		realloc(handshake_message.handshake, buffer.header.tamanio);
 		memset(&handshake_message, 0, buffer.header.tamanio);
-		handshake_message.handshake = deserializar_mensaje(buffer.data, HSKERNEL);
+		handshake_message.handshake = deserializar_mensaje(buffer.data, MSJ_HANDSHAKE);
 	}else{
 		perror("Error al recibir OK del Kernel, tipo mensaje incorrecto");
 	}
@@ -409,10 +377,10 @@ int enviar_codigo(int socket, char* path){
 	/* Crear el archivo y cargarlo con el programa*/
 	t_programa_ansisop* archivo = crear_y_cargar_archivo(path);
 	archivo->pid = 0;
-	int size_mensaje = calcular_tamanio_mensaje(archivo, HSKERNEL);
+	int size_mensaje = calcular_tamanio_mensaje(archivo, MSJ_PROGRAMA_ANSISOP);
 
 	/* Enviar el programa al Kernel, para crear el proceso*/
-	if(enviar_mensaje(archivo, MSJ_FILE_CODE, size_mensaje, socket) == 1){
+	if(enviar_mensaje(archivo, MSJ_PROGRAMA_ANSISOP, size_mensaje, socket) == 1){
 		perror("Fallo envio del archivo al Kernel");
 	}
 
@@ -421,57 +389,11 @@ int enviar_codigo(int socket, char* path){
 	buffer = recibir_mensaje(socket);
 
 	/* Deserializo mensaje */
-	if(buffer.header.id_tipo == MSJ_FILE_CODE){
-		archivo->pid = deserializar_mensaje(buffer.data, MSJ_FILE_CODE);
+	if(buffer.header.id_tipo == MSJ_PROGRAMA_ANSISOP){
+		archivo->pid = deserializar_mensaje(buffer.data, MSJ_PROGRAMA_ANSISOP);
 	}else{
 		perror("Error al recibir PID del proceso creado por el Kernel, tipo mensaje incorrecto");
 	}
 
 	return archivo->pid;
 }
-
-//void conectar_al_kernel() {
-//
-//	server_socket = cliente_crear_socket(config->ip_kernel,
-//			config->puerto_kernel);
-//
-//	int AUX_CONEC_KER = connect(server_socket.socket,
-//			server_socket.socket_info->ai_addr,
-//			server_socket.socket_info->ai_addrlen);
-//
-//	if (AUX_CONEC_KER < 0) {
-//		printf("Error en connect CONSOLA -> KERNEL\n");
-//		exit(-1);
-//	}
-//
-//	//HandShake CONSOLA -> KERNEL
-//	if (AUX_CONEC_KER == saludar(HSKERNEL, TOCPUKERNEL, server_socket.socket)) {
-//		CONECTADOALKERNEL = 1;
-//	}
-//
-//	connect(server_socket.socket, server_socket.socket_info->ai_addr,
-//			server_socket.socket_info->ai_addrlen);
-//
-//	freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
-//	printf("CONECTADO AL KERNEL: %d", CONECTADOALKERNEL);
-//
-//	if (CONECTADOALKERNEL) {
-//		int enviar = 1;
-//		char message[PACKAGESIZE];
-//		printf(
-//				"Conectado al servidor. Ya puede enviar mensajes. Escriba 'exit' para salir\n");
-//		while (enviar) {
-//			fgets(message, PACKAGESIZE, stdin); // Lee una linea en el stdin (lo que escribimos en la consola) hasta encontrar un \n (y lo incluye) o llegar a PACKAGESIZE.
-//			if (!strcmp(message, "exit\n"))
-//				enviar = 0; // Chequeo que el usuario no quiera salir
-//			if (enviar)
-//				send(server_socket.socket, message, strlen(message) + 1, 0); // Solo envio si el usuario no quiere salir.
-//		}
-//
-//	} else {
-//
-//		close(server_socket.socket);
-//		printf("HANDSHAKE ERROR - No se pudo conectar al KERNEL");
-//		return;
-//	}
-//}
