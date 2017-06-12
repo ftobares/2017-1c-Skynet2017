@@ -164,12 +164,15 @@ t_buffer recibir_mensaje(uint32_t un_socket) {
 	t_buffer buffer;
 	buffer.socket = un_socket;
 	buffer.header.tamanio = 0;
-	buffer.header.id_tipo = 1;
-	buffer.data = malloc(sizeof(t_header));
+	buffer.header.id_tipo = 0;
+	int lenMensaje = sizeof(buffer.header.tamanio)+sizeof(buffer.header.id_tipo);
+	buffer.data = malloc(lenMensaje);
+	memset(buffer.data, '\0', lenMensaje);
 
 	// Recibir datos y guardarlos en el buffer
 	// Primero recibo el header para saber tipo de mensaje y tamaño
-	int bytes_retorno = recv(buffer.socket, buffer.data, sizeof(t_header), MSG_WAITALL);
+	printf("Recibo mensaje\n");
+	int bytes_retorno = recv(buffer.socket, buffer.data, lenMensaje, MSG_WAITALL);
 	if (bytes_retorno == -1) {
 		buffer.header.id_tipo = -1;
 		perror("Error al recibir header\n");
@@ -180,17 +183,23 @@ t_buffer recibir_mensaje(uint32_t un_socket) {
 		printf("Se desconecto el socket=%d\n",buffer.socket);
 		return buffer;
 	}
-	t_header* header = deserializar_mensaje(buffer.data,buffer.header.id_tipo);
+	t_header* header = deserializar_mensaje(buffer.data,MSJ_HEADER);
 	buffer.header.id_tipo = header->id_tipo;
 	buffer.header.tamanio = header->tamanio;
 
-	// Segundo recervar memoria suficiente para el mensaje
-	memset(buffer.data, 0, sizeof(t_header));
+	// Segundo reservar memoria suficiente para el mensaje
 	buffer.data = realloc(buffer.data, buffer.header.tamanio);
-	if (read(buffer.socket, buffer.data, buffer.header.tamanio) == -1) {
+	memset(buffer.data, "\0", buffer.header.tamanio);
+	int bytesPayload = recv(buffer.socket, buffer.data, buffer.header.tamanio, MSG_WAITALL);
+	if (bytesPayload == -1) {
+		buffer.header.id_tipo = -1;
+		perror("Error al recibir payload\n");
+		return buffer;
+	}else if(bytesPayload == 0){
+		buffer.header.tamanio = 0;
 		buffer.header.id_tipo = 0;
-		free(buffer.data);
-		perror("Error al recibir el payload\n");
+		printf("Se desconecto el socket=%d\n",buffer.socket);
+		return buffer;
 	}
 
 	return buffer;
@@ -205,7 +214,9 @@ int enviar_mensaje(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un
 
 	t_buffer* buffer = serializar_mensajes(data, tipo_mensaje, size, un_socket);
 
-	if (send(buffer->socket, &buffer->data, sizeof(buffer->header.tamanio), 0) > 0) {
+	int bytes = send(buffer->socket, &buffer->data, size, 0);
+	if (bytes > 0) {
+		printf("Bytes enviados: %d\n", bytes);
 		return 0;
 	}
 	perror("Error al Enviar Datos\n");

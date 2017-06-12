@@ -62,30 +62,30 @@ int main(int argc, char** argv) {
 	string_append(&file_path, "./src/memoria.config");
 	config = cargar_configuracion(file_path, TIPO_PROYECTO);
 //
-//	int v_valor_retorno = iniciar_servidor();
+	int v_valor_retorno = iniciar_servidor();
 //
 //	return v_valor_retorno;
 
-	archivo_disco_memoria = fopen(NOMBRE_ARCHIVO_DISCO, "wt");
-	log = log_create(NOMBRE_LOG, "MEMORIA", true, LOG_LEVEL_TRACE);
-
-	//HILOS
-	pthread_t hilo_conexiones, hilo_consola; //hacer funcion de conexiones
-
-	//instanciamos la memoria ppal y cache
-	memoria = new_memoria(config->marcos, config->marcosSize);
-	cache = new_cache(config->entradasCache, config->marcosSize);
-
-	//iniciamos los hilos
-	pthread_create(&hilo_conexiones, NULL, (void*) iniciar_servidor, NULL );
-	pthread_create(&hilo_consola, NULL, (void*) consola, NULL );
-
-	//finalizamos
-	free(config);
-	free(memoria);
-	free(cache);
-	//free(log); ??????
-	fclose(archivo_disco_memoria);
+//	archivo_disco_memoria = fopen(NOMBRE_ARCHIVO_DISCO, "wt");
+//	log = log_create(NOMBRE_LOG, "MEMORIA", true, LOG_LEVEL_TRACE);
+//
+//	//HILOS
+//	pthread_t hilo_conexiones, hilo_consola; //hacer funcion de conexiones
+//
+//	//instanciamos la memoria ppal y cache
+//	memoria = new_memoria(config->marcos, config->marcosSize);
+//	cache = new_cache(config->entradasCache, config->marcosSize);
+//
+//	//iniciamos los hilos
+//	pthread_create(&hilo_conexiones, NULL, (void*) iniciar_servidor, NULL );
+//	pthread_create(&hilo_consola, NULL, (void*) consola, NULL );
+//
+//	//finalizamos
+//	free(config);
+//	free(memoria);
+//	free(cache);
+//	//free(log); ??????
+//	fclose(archivo_disco_memoria);
 	return 0;
 }
 

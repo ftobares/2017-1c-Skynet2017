@@ -32,6 +32,7 @@
 
 /* Variables Globales */
 t_console_config* config;
+t_socket server_socket;
 sem_t sem_tipo_operacion;
 sem_t sem_hay_instruccion;
 sem_t sem_primera_ejecucion;
@@ -42,6 +43,7 @@ char* pid_proceso;
 int primera_ejecucion = 1;
 
 /* Declaracion de funciones */
+void connect_to_kernel();
 int hilo_lector_interfaz_usuario();
 void hilo_manager_programa();
 void hilo_procesar_operacion(void* tipo_operacion);
@@ -62,26 +64,103 @@ int main(int argc, char* argv) {
 	pthread_attr_t thread_programa_attr;
 
 	/* Inicializo semaforos  */
-	sem_init(&sem_tipo_operacion, 0, 1);
-	sem_init(&sem_hay_instruccion, 0, 0);
-	sem_init(&sem_primera_ejecucion, 0, 1);
+//	sem_init(&sem_tipo_operacion, 0, 1);
+//	sem_init(&sem_hay_instruccion, 0, 0);
+//	sem_init(&sem_primera_ejecucion, 0, 1);
+
+	connect_to_kernel();
 
 	/* Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)  */
-	pthread_attr_init(&thread_usuario_attr);
-	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
+//	pthread_attr_init(&thread_usuario_attr);
+//	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
 
 	/* Creo un hilo encargado de manejar los hilos que realizan las operaciones (Programa)  */
-	pthread_attr_init(&thread_programa_attr);
-	pthread_create(&thread_programa_id, &thread_programa_attr, &hilo_manager_programa, NULL);
+//	pthread_attr_init(&thread_programa_attr);
+//	pthread_create(&thread_programa_id, &thread_programa_attr, &hilo_manager_programa, NULL);
 
-	pthread_join(thread_usuario_id, NULL);
-	pthread_join(thread_programa_id, NULL);
+//	pthread_join(thread_usuario_id, NULL);
+//	pthread_join(thread_programa_id, NULL);
 
-	sem_destroy(&sem_tipo_operacion);
-	sem_destroy(&sem_hay_instruccion);
-	sem_destroy(&sem_primera_ejecucion);
+//	sem_destroy(&sem_tipo_operacion);
+//	sem_destroy(&sem_hay_instruccion);
+//	sem_destroy(&sem_primera_ejecucion);
 
 	return 0;
+}
+
+void connect_to_kernel(){
+
+	/* leer archivo config */
+	printf("Cargo archivo configuracion\n");
+	char* file_path;
+	file_path = string_new();
+	string_append(&file_path, "./src/consola.config");
+	config = cargar_configuracion(file_path, TIPO_PROYECTO);
+
+	/* Handshake */
+	printf("Hacer handshake con Kernel\n");
+	server_socket = cliente_crear_socket(config->ip_kernel,config->puerto_kernel);
+
+	/* Conectar al Kernel  */
+	int AUX_CONEC_KER = connect(server_socket.socket,
+			server_socket.socket_info->ai_addr,
+			server_socket.socket_info->ai_addrlen);
+
+	if (AUX_CONEC_KER < 0) {
+		printf("Error en connect CONSOLA -> KERNEL\n");
+		exit(-1);
+	}
+
+	/* HandShake CONSOLA -> KERNEL  */
+	if (AUX_CONEC_KER == saludar(server_socket.socket)) {
+		printf("Handshake Exitoso! \n");
+	}else{
+		exit(-1);
+	}
+
+	connect(server_socket.socket, server_socket.socket_info->ai_addr,
+			server_socket.socket_info->ai_addrlen);
+
+	freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
+	printf("CONECTADO AL KERNEL: %d", server_socket.socket);
+}
+
+int saludar(int sRemoto) {
+
+	int aux;
+
+	t_handshake handshake_message;
+	handshake_message.handshake = string_new();
+	string_append(&handshake_message.handshake, "C");
+	int size_mensaje = calcular_tamanio_mensaje(&handshake_message, MSJ_HANDSHAKE);
+
+	if(enviar_mensaje(&handshake_message, MSJ_HANDSHAKE, size_mensaje, sRemoto) == 1){
+		perror("Fallo el envio del mensaje handshake con Kernel");
+	}
+
+	t_buffer buffer;
+	buffer = recibir_mensaje(sRemoto);
+
+	if(buffer.header.id_tipo == MSJ_HANDSHAKE){
+		realloc(handshake_message.handshake, buffer.header.tamanio);
+		memset(&handshake_message, 0, buffer.header.tamanio);
+		handshake_message.handshake = deserializar_mensaje(buffer.data, MSJ_HANDSHAKE);
+	}else{
+		perror("Error al recibir OK del Kernel, tipo mensaje incorrecto");
+	}
+
+	if (!(string_starts_with(handshake_message.handshake, OK)))
+	{
+		printf("ERROR: HANDSHAKE NO FUE EXITOSO \n");
+		aux = -1;
+	}
+	else
+		aux = 0;
+
+	free(handshake_message.handshake);
+	free(buffer.data);
+
+	return aux;
 }
 
 /* FUNCIONES INTERFAZ */
@@ -226,46 +305,8 @@ void hilo_procesar_operacion(void* tipo_operacion){
 		printf("hilo_procesar_operacion tipo_operacion=%i\n",v_tipo_operacion);
 		pthread_t th_iniciar_proceso_id;
 		pthread_attr_t th_iniciar_proceso_attr;
-		t_socket server_socket;
 		char* path = path_archivo_a_enviar;
 		sem_post(&sem_path_archivo);
-
-		if(primera_ejecucion == 1){
-			primera_ejecucion = 0; //Analizar si hace falta un semaforo (ya definido como sem_primera_ejecucion
-
-			//leer archivo config
-			printf("Cargo archivo configuracion\n");
-			char* file_path;
-			file_path = string_new();
-			string_append(&file_path, "./src/consola.config");
-			config = cargar_configuracion(file_path, TIPO_PROYECTO);
-		}
-
-		//handshake
-		printf("Hacer handshake con Kernel\n");
-		server_socket = cliente_crear_socket(config->ip_kernel,config->puerto_kernel);
-
-		int AUX_CONEC_KER = connect(server_socket.socket,
-				server_socket.socket_info->ai_addr,
-				server_socket.socket_info->ai_addrlen);
-
-		if (AUX_CONEC_KER < 0) {
-			printf("Error en connect CONSOLA -> KERNEL\n");
-			exit(-1);
-		}
-
-		//HandShake CONSOLA -> KERNEL
-		if (AUX_CONEC_KER == saludar(server_socket.socket)) {
-			printf("Handshake Exitoso! \n");
-		}
-
-		//enviar mensaje
-		printf("send mensaje a Kernel\n");
-		connect(server_socket.socket, server_socket.socket_info->ai_addr,
-				server_socket.socket_info->ai_addrlen);
-
-		freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
-		printf("CONECTADO AL KERNEL: %d", server_socket.socket);
 
 		int v_pid = enviar_codigo(server_socket.socket, path);
 		if(v_pid == -1){
@@ -286,62 +327,6 @@ void hilo_procesar_operacion(void* tipo_operacion){
 		printf("hilo_procesar_operacion - operacion invalida\n");
 	}
 	printf("Fin hilo_procesar_operacion \n");
-}
-
-//int Enviar(int sRemoto, char * buffer)
-//{
-//  int cantBytes;
-//  cantBytes = send(sRemoto, buffer, strlen(buffer), 0);
-//  if (cantBytes == -1)
-//    printf("ERROR ENVIO DATOS.\n");
-//  return cantBytes;
-//}
-//
-//int Recibir(int sRemoto, char * buffer)
-//{
-//  int bytecount;
-//  memset(buffer, 0, BUFFERSIZE);
-//  if ((bytecount = recv(sRemoto, buffer, BUFFERSIZE, 0)) == -1)
-//	printf("ERROR RECIBO DATOS. \n");
-//
-//  return bytecount;
-//}
-
-int saludar(int sRemoto) {
-
-	int aux;
-
-	t_handshake handshake_message;
-	handshake_message.handshake = string_new();
-	string_append(&handshake_message.handshake, "C");
-	int size_mensaje = calcular_tamanio_mensaje(&handshake_message, MSJ_HANDSHAKE);
-
-	if(enviar_mensaje(&handshake_message, MSJ_HANDSHAKE, size_mensaje, sRemoto) == 1){
-		perror("Fallo el envio del mensaje handshake con Kernel");
-	}
-
-	t_buffer buffer;
-	buffer = recibir_mensaje(sRemoto);
-
-	if(buffer.header.id_tipo == MSJ_HANDSHAKE){
-		realloc(handshake_message.handshake, buffer.header.tamanio);
-		memset(&handshake_message, 0, buffer.header.tamanio);
-		handshake_message.handshake = deserializar_mensaje(buffer.data, MSJ_HANDSHAKE);
-	}else{
-		perror("Error al recibir OK del Kernel, tipo mensaje incorrecto");
-	}
-
-	if (!(string_starts_with(handshake_message.handshake, OK)))
-	{
-		printf("ERROR: HANDSHAKE NO FUE EXITOSO \n");
-	}
-	else
-		aux = 0;
-
-	free(handshake_message.handshake);
-	free(buffer.data);
-
-	return aux;
 }
 
 t_programa_ansisop* crear_y_cargar_archivo(char* path){
