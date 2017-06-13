@@ -45,7 +45,7 @@ t_socket cliente_crear_socket(char* ip, char* puerto) {
  *		 Crea el socket y asigna el identificador. Rellena addrinfo
  *		 con AF_INET, INADDR_ANY y el PUERTO.
  */
-t_socket servidor_crear_socket(int puerto) {
+t_socket servidor_crear_socket(uint32_t puerto) {
 	t_socket un_socket;
 	un_socket.socket = 0;
 	if ((un_socket.socket = socket(AF_INET, SOCK_STREAM, 0)) != -1) {
@@ -64,7 +64,7 @@ t_socket servidor_crear_socket(int puerto) {
  *		 Crea el socket y asigna el identificador. Rellena addrinfo
  *		 con AF_INET, INADDR_ANY y el PUERTO.
  */
-t_master_socket servidor_crear_socket_master(int puerto) {
+t_master_socket servidor_crear_socket_master(uint32_t puerto) {
 	t_master_socket un_socket;
 	un_socket.socket = 0;
 	if ((un_socket.socket = socket(AF_INET, SOCK_STREAM, 0)) != -1) {
@@ -95,8 +95,8 @@ t_socket conectar_a_otro_servidor(char* ip, char* puerto) {
  *@DESC: Funcion para crear, configurar y dejar escuchando un socket
  *		 en un puerto. Uso exclusivo para socket select.
  */
-t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt,
-		int conexiones_maximas) {
+t_master_socket servidor_crear_socket_bind_and_listen(uint32_t puerto, uint32_t opt,
+		uint32_t conexiones_maximas) {
 
 	t_master_socket un_socket;
 	un_socket.socket = 0;
@@ -136,14 +136,14 @@ t_master_socket servidor_crear_socket_bind_and_listen(int puerto, int opt,
 /*@NAME: crear_buffer
  *@DESC: Crea un buffer a partir de los datos enviados
  */
-t_buffer* crear_buffer(int32_t tipo_mensaje, int32_t size, int32_t un_socket) {
+t_buffer* crear_buffer(uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket) {
 	t_buffer* buffer_temp = malloc(sizeof(t_buffer));
 	t_header header;
 	header.id_tipo = tipo_mensaje;
 	header.tamanio = size;
 	buffer_temp->header = header;
 	buffer_temp->socket = un_socket;
-	buffer_temp->data = malloc(header.tamanio);
+	buffer_temp->data = malloc(sizeof(t_header)+header.tamanio);
 	return buffer_temp;
 }
 
@@ -159,32 +159,48 @@ void destruir_buffer(t_buffer* buffer) {
  *@DESC: Recibe datos y los guarda en el buffer
  *@DESC: tener en cuenta que hay que deserializar el buffer.data
  */
-t_buffer recibir_mensaje(int32_t un_socket) {
+t_buffer recibir_mensaje(uint32_t un_socket) {
 
 	t_buffer buffer;
 	buffer.socket = un_socket;
 	buffer.header.tamanio = 0;
 	buffer.header.id_tipo = 0;
-	buffer.data = malloc(sizeof(t_header));
+	int lenMensaje = sizeof(buffer.header.tamanio)+sizeof(buffer.header.id_tipo);
+	buffer.data = malloc(lenMensaje);
+	memset(buffer.data, '\0', lenMensaje);
 
 	// Recibir datos y guardarlos en el buffer
 	// Primero recibo el header para saber tipo de mensaje y tamaño
-	if (recv(buffer.socket, &buffer.data, sizeof(t_header), MSG_WAITALL) == -1) {
+	int bytes_retorno = recv(buffer.socket, buffer.data, lenMensaje, MSG_WAITALL);
+	printf("Recibo header-mensaje, bytes=%d \n",bytes_retorno);
+	if (bytes_retorno == -1) {
+		buffer.header.id_tipo = -1;
+		perror("Error al recibir header\n");
+		return buffer;
+	}else if(bytes_retorno == 0){
+		buffer.header.tamanio = 0;
 		buffer.header.id_tipo = 0;
-		perror("Error al recibir header");
+		printf("Se desconecto el socket=%d\n",buffer.socket);
 		return buffer;
 	}
-	t_header* header = deserializar_mensaje(buffer.data,buffer.header.id_tipo);
+	t_header* header = deserializar_mensaje(buffer.data,MSJ_HEADER);
 	buffer.header.id_tipo = header->id_tipo;
 	buffer.header.tamanio = header->tamanio;
 
-	// Segundo recervar memoria suficiente para el mensaje
-	memset(buffer.data, 0, sizeof(t_header));
+	// Segundo reservar memoria suficiente para el mensaje
 	buffer.data = realloc(buffer.data, buffer.header.tamanio);
-	if (read(buffer.socket, &buffer.data, buffer.header.tamanio) == -1) {
+//	memset(buffer.data, "\0", buffer.header.tamanio);
+	int bytesPayload = recv(buffer.socket, buffer.data, buffer.header.tamanio, MSG_WAITALL);
+	printf("Recibo payload-mensaje, bytes=%d \n",bytesPayload);
+	if (bytesPayload == -1) {
+		buffer.header.id_tipo = -1;
+		perror("Error al recibir payload\n");
+		return buffer;
+	}else if(bytesPayload == 0){
+		buffer.header.tamanio = 0;
 		buffer.header.id_tipo = 0;
-		free(buffer.data);
-		perror("Error al recibir el payload");
+		printf("Se desconecto el socket=%d\n",buffer.socket);
+		return buffer;
 	}
 
 	return buffer;
@@ -193,13 +209,15 @@ t_buffer recibir_mensaje(int32_t un_socket) {
 /*@NAME: enviar_mensaje
  *@DESC: Envia datos cargados en el buffer
  *@DESC: Datos ya deben venir serializados
- *@RETURN: Devuelve 1-fallo/false , 0-exito/truel
+ *@RETURN: Devuelve 1-fallo/false , 0-exito/true
  */
-int enviar_mensaje(void* data, int tipo_mensaje, int size, int un_socket) {
+int enviar_mensaje(t_buffer* buffer) {
 
-	t_buffer* buffer = serializar_mensajes(&data, tipo_mensaje, size, un_socket);
+	int bytes_to_send = sizeof(t_header)+buffer->header.tamanio;
 
-	if (send(buffer->socket, &buffer->data, sizeof(buffer->header.tamanio), 0) > 0) {
+	int bytes = send(buffer->socket, buffer->data, bytes_to_send, 0);
+	if (bytes > 0) {
+		printf("Bytes enviados: %d\n", bytes);
 		return 0;
 	}
 	perror("Error al Enviar Datos\n");
@@ -211,29 +229,56 @@ int enviar_mensaje(void* data, int tipo_mensaje, int size, int un_socket) {
  *@DESC: header y mensaje. Luego se serializan segun el tipo de dato.
  *@DESC: Datos de ingreso:
  *@DESC: 	data-> struct del mensaje
- *@DESC: 	buffer-> struct t_buffer creado anteriormente
+ *@DESC: 	tipo_mensaje-> mensaje segun protocolo
+ *@DESC: 	size-> tamaño del archivo
+ *@DESC: 	un_socket-> socket de conexion
  */
-t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_socket) {
-	int offset = 0;
+t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket) {
+	uint32_t offset = 0;
+	uint32_t id_tipo;
+	uint32_t tamanio;
 	t_buffer* buffer = crear_buffer(tipo_mensaje, size, un_socket);
 
 	switch(buffer->header.id_tipo){
-	case 1:
-		printf("Inicio serializacion \n");
-		//Casteo la data al tipo de struct del mensaje
-		t_mensaje1* mensaje = (struct t_mensaje1*) data;
+	case MSJ_HANDSHAKE:
+		printf("Inicio serializacion handshake \n");
+		t_handshake* handshake = (struct t_handshake*) data;
 
-		//Agrego el encabezado en la estructura de datos
-		memcpy(buffer->data + offset, &buffer->header, sizeof(buffer->header));
-		offset += sizeof(buffer->header);
+		//Host to Network
+		id_tipo = htons(buffer->header.id_tipo);
+		tamanio = htons(buffer->header.tamanio);
 
-		//Agrego el mensaje
-//		int32_t host_to_network = htonl(mensaje->valor1);
-		memcpy(buffer->data + offset, &mensaje->valor1, sizeof(int32_t));
-		offset += sizeof(int32_t);
+		memcpy(buffer->data, &id_tipo, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
 
-		memcpy(buffer->data + offset, mensaje->valor2, strlen(mensaje->valor2)+1);
+		memcpy(buffer->data + offset, &tamanio, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
 
+		memcpy(buffer->data + offset, handshake->handshake, strlen(handshake->handshake));
+
+		printf("Fin serializacion handshake \n");
+		return buffer;
+	case MSJ_PROGRAMA_ANSISOP:
+		printf("Inicio serializacion programa ansisop \n");
+		t_programa_ansisop* programa_ansisop = (struct t_programa_ansisop*) data;
+
+		//Host to Network
+		id_tipo = htons(buffer->header.id_tipo);
+		tamanio = htons(buffer->header.tamanio);
+		uint32_t pid = htons(programa_ansisop->pid);
+
+		memcpy(buffer->data, &id_tipo, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &tamanio, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &pid, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, programa_ansisop->contenido, strlen(programa_ansisop->contenido));
+
+		printf("Fin serializacion programa ansisop \n");
 		return buffer;
 	default:
 		return buffer;
@@ -242,52 +287,65 @@ t_buffer* serializar_mensajes(void* data, int tipo_mensaje, int size, int un_soc
 
 /*@NAME: deserializar_mensaje (
  *@DESC: La funcion deserializa un stream de datos poniendolo
- *@DESC: en un struct segun el tipo de mensaje. Devuelve ese
- *@DESC: struct cargado.
- *@DESC: FIXME: Tiene un bug en el cual la deserializacion del int queda mal,
- *@DESC: y esto proboca que el mensaje tambien quede corrido 2 posiciones.
+ *@DESC: en un struct segun el tipo de mensaje. Devuelve un
+ *@DESC: puntero a ese struct cargado.
  */
-void* deserializar_mensaje(char* stream_buffer, int tipo_mensaje) {
-	int offset = 0;
+void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
+	uint32_t offset = 0;
 
 	switch(tipo_mensaje){
-	case 0:
+	case MSJ_HEADER:
 		printf("Inicio deserializacion header \n");
-		printf("Alloco %d memoria \n",sizeof(t_header));
 		t_header* header = malloc(sizeof(t_header));
-		header->id_tipo = 0;
-		header->tamanio = 0;
+		uint32_t id_tipo = 0;
+		uint32_t tamanio = 0;
 
-		printf("Copio en header->id_tipo <= %p \n", stream_buffer);
-		memcpy(&header->id_tipo, stream_buffer, sizeof(header->id_tipo));
-		offset += sizeof(header->id_tipo);
+		//printf("Copio en header->id_tipo <= %p \n", stream_buffer);
+		memcpy(&id_tipo, stream_buffer, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
 
-		printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
-		memcpy(&header->tamanio, stream_buffer + offset, sizeof(header->tamanio));
+		//printf("Copio en header->tamanio <= %p \n", stream_buffer + offset);
+		memcpy(&tamanio, stream_buffer + offset, sizeof(uint32_t));
+
+		//Network_to_Host
+		header->id_tipo = htons(id_tipo);
+		header->tamanio = htons(tamanio);
+
+		printf("Fin deserializacion header \n");
 
 		return header;
-	case 1:
-		printf("Inicio deserializacion mensaje 1\n");
-		printf("Alloco %d memoria \n",sizeof(t_mensaje1));
-		t_mensaje1* mensaje = malloc(sizeof(t_mensaje1));
-		mensaje->valor1 = 0;
+	case MSJ_HANDSHAKE:
+		printf("Inicio deserializacion handshake \n");
+		t_handshake* handshake = malloc(sizeof(t_handshake));
 
-		offset += sizeof(t_header);
+		handshake->handshake = strdup(stream_buffer);
 
-		printf("Copio en mensaje->valor1 <= %p \n", stream_buffer + offset);
-		memcpy(&mensaje->valor1, stream_buffer + offset, sizeof(mensaje->valor1));
-//		uint32_t network_to_host = ntohl(mensaje->valor1);
-//		mensaje->valor1 = network_to_host;
-		offset += sizeof(mensaje->valor1);
-		printf("Mensaje->valor1 <= %d \n",mensaje->valor1);
+		printf("Fin deserializacion handshake \n");
 
-		printf("Copio en mensaje->valor2 <= %p \n", stream_buffer + offset);
-		char* valor2 = strdup(stream_buffer + offset);
-		mensaje->valor2 = valor2;
-		printf("Mensaje->valor2 <= %s \n",mensaje->valor2);
+		return handshake;
+	case MSJ_PROGRAMA_ANSISOP:
+		printf("Inicio deserializacion programa ansisop \n");
+		t_programa_ansisop* programa_ansisop = malloc(sizeof(t_programa_ansisop));
 
-		return mensaje;
+		memcpy(&programa_ansisop->pid, stream_buffer, sizeof(programa_ansisop->pid));
+		offset += sizeof(programa_ansisop->pid);
+
+		//Network_to_Host
+		programa_ansisop->pid = htons(programa_ansisop->pid);
+
+		programa_ansisop->contenido = strdup(stream_buffer + offset);
+
+		printf("Fin deserializacion programa ansisop \n");
+
+		return programa_ansisop;
+
 	default:
 		return NULL;
 	}
+}
+
+void clean_or_init_buffer(t_buffer* buffer){
+	buffer->socket = 999;
+	buffer->header.id_tipo = 0;
+	buffer->header.tamanio = 0;
 }

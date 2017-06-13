@@ -8,20 +8,27 @@
 #ifndef SRC_UTILS_PROTOCOLO_H_
 #define SRC_UTILS_PROTOCOLO_H_
 
+#include <stdio.h>
+#include <stdint.h>
+
 //Estructuras para cada mensaje
+#define MSJ_HEADER 1
+#define MSJ_HANDSHAKE 2
+#define MSJ_PROGRAMA_ANSISOP 3
+#define MSJ_PCB 4
 
 /* Estructuras genericas, modificar y agregar cuando definamos
  * el protocolo */
-typedef struct{
-	int valor1;
-	char* valor2;
-} t_mensaje1;
 
 typedef struct{
-	int valor1;
-	int valor2;
-} t_mensaje2;
+	char* handshake;
+} t_handshake;
 
-int calcular_tamanio_mensaje(void* p_mensaje, int tipo_mensaje);
+typedef struct{
+	uint32_t pid;
+	char* contenido;
+} t_programa_ansisop;
+
+uint32_t calcular_tamanio_mensaje(void* p_mensaje, uint32_t tipo_mensaje);
 
 #endif /* SRC_UTILS_PROTOCOLO_H_ */

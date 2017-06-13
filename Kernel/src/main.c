@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h> //Solo para numero random BORRAR CUANDO NO SE USE!
 #include <commons/config.h>
 #include <commons/string.h>
 #include <commons/collections/list.h>
@@ -12,7 +13,8 @@
 #include <arpa/inet.h> //inet_addr
 #include <src/utils_config.h>
 #include <src/utils_socket.h>
-#include <parser/metadata_program.h>
+#include <src/utils_protocolo.h>
+//#include <parser/metadata_program.h>
 
 #define BACKLOG 30	// Cantidad conexiones maximas
 #define PACKAGESIZE 1024	// Size maximo del paquete a enviar
@@ -20,12 +22,16 @@
 #define FALSE 0
 #define CantClientes 30
 #define TIPO_PROYECTO 4
-#define MSJ_HANDSHAKE_CPU 'H'
-#define MSJ_HANDSHAKE_CONSOLA 'C'
+
+#define MSJ_HEADER 1
+#define MSJ_HANDSHAKE 2
+#define MSJ_PROGRAMA_ANSISOP 3
+#define MSJ_PCB 4
+
 #define MSJ_CONFIRMACION "1"
 #define MSJ_NEGACION     "0"
-#define HANDSHAKE_CPU '1'
-#define HANDSHAKE_CONSOLA '2'
+#define HANDSHAKE_CPU "H"
+#define HANDSHAKE_CONSOLA "C"
 //Variables Globales
 t_kernel_config* config;
 t_socket socket_memoria;
@@ -40,10 +46,10 @@ typedef struct
 	int offsetFin;
 } indiceCodigo;
 
-typedef struct {
-	t_size etiqueta_size; // Tamaño del mapa serializado de etiquetas
-	char* etiqueta;  // La serializacion de las etiquetas
-} indiceEtiquetas;
+//typedef struct {
+//	t_size etiqueta_size; // Tamaño del mapa serializado de etiquetas
+//	char* etiqueta;  // La serializacion de las etiquetas
+//} indiceEtiquetas;
 
 typedef struct
 {
@@ -61,20 +67,20 @@ typedef struct
 
 } indiceStack;
 
-typedef struct {
-	uint32_t PID;
-	uint32_t PC;
-	uint32_t paginasCodigo;
-	uint32_t paginasStack;
-	uint32_t cantOperacIO;
-
-	t_size tamanioIndiceDeCodigo;
-	t_intructions* indiceDeCodigo;
-	indiceEtiquetas indiceDeEtiquetas;
-	uint32_t SP;
-	t_size tamanioIndiceStack;
-	t_list* indiceDeStack;
-} t_PCB;
+//typedef struct {
+//	uint32_t PID;
+//	uint32_t PC;
+//	uint32_t paginasCodigo;
+//	uint32_t paginasStack;
+//	uint32_t cantOperacIO;
+//
+//	t_size tamanioIndiceDeCodigo;
+//	t_intructions* indiceDeCodigo;
+//	indiceEtiquetas indiceDeEtiquetas;
+//	uint32_t SP;
+//	t_size tamanioIndiceStack;
+//	t_list* indiceDeStack;
+//} t_PCB;
 
 
 int main(int argc, char** argv) {
@@ -87,42 +93,53 @@ int main(int argc, char** argv) {
 	return v_valor_retorno;
 }
 
-int EnviarDatos(int socket, void *buffer) {
-	int bytecount;
+void enviar_respuesta_handshake(int socket, char* buffer) {
+	t_handshake temp_handshake;
+	temp_handshake.handshake = string_new();
+	string_append(&temp_handshake.handshake, buffer);
+	int size_mensaje = calcular_tamanio_mensaje(&temp_handshake.handshake, MSJ_HANDSHAKE);
 
-	if ((bytecount = send(socket, buffer, strlen(buffer), 0)) == -1)
+	printf("Mensaje a serializar %s\n", temp_handshake.handshake);
+	t_buffer* buffer_to_send = serializar_mensajes(&temp_handshake, MSJ_HANDSHAKE, size_mensaje, socket);
+
+	if(enviar_mensaje(buffer_to_send) == 1){
 		perror("No puedo enviar información al/los cliente/s");
+	}
 
-	return bytecount;
+	//destroy buffer
+	free(temp_handshake.handshake);
+	free(buffer_to_send->data);
+	free(buffer_to_send);
 }
 
-void inicializarPCB(int pID,char* codigoAnsisop) {
-	t_PCB* pcb=malloc(sizeof(t_PCB));
-			t_metadata_program* metaProg=metadata_desde_literal(codigoAnsisop);
-			pcb->PID=(uint32_t)pID;
-			pcb->PC=metaProg->instruccion_inicio;
-			pcb->indiceDeCodigo=metaProg->instrucciones_serializado;
-			pcb->tamanioIndiceDeCodigo=metaProg->instrucciones_size;
-			pcb->indiceDeEtiquetas.etiqueta=metaProg->etiquetas;
-			pcb->indiceDeEtiquetas.etiqueta_size=metaProg->etiquetas_size;
-			pcb->paginasCodigo=(obtenerCantPags(codigoAnsisop));
-			pcb->paginasStack=config->stackSize;
-			pcb->cantOperacIO=0;
-			pcb->SP=0;
-			pcb->tamanioIndiceStack=0;
-}
+//void inicializarPCB(int pID,char* codigoAnsisop) {
+//	t_PCB* pcb=malloc(sizeof(t_PCB));
+//			t_metadata_program* metaProg=metadata_desde_literal(codigoAnsisop);
+//			pcb->PID=(uint32_t)pID;
+//			pcb->PC=metaProg->instruccion_inicio;
+//			pcb->indiceDeCodigo=metaProg->instrucciones_serializado;
+//			pcb->tamanioIndiceDeCodigo=metaProg->instrucciones_size;
+//			pcb->indiceDeEtiquetas.etiqueta=metaProg->etiquetas;
+//			pcb->indiceDeEtiquetas.etiqueta_size=metaProg->etiquetas_size;
+//			pcb->paginasCodigo=(obtenerCantPags(codigoAnsisop));
+//			pcb->paginasStack=config->stackSize;
+//			pcb->cantOperacIO=0;
+//			pcb->SP=0;
+//			pcb->tamanioIndiceStack=0;
+//}
 
 
 int iniciar_servidor() {
 	int opt = TRUE;
 	int addrlen, new_socket, cliente_socket[CantClientes], max_clientes =
-	CantClientes, actividad, i, valorLectura, sd /*, read_size*/;
+	CantClientes, actividad, i, /*valorLectura,*/ sd /*, read_size*/;
+	t_buffer buffer;
 	int max_sd;
 
 	fd_set readfds;
 
-	char mensaje[PACKAGESIZE];
-	char tipo_mensaje;
+	//char mensaje[PACKAGESIZE];
+	//char tipo_mensaje;
 	//Conectarse a la Memoria
 	socket_memoria = conectar_a_otro_servidor(config->ipMemoria,
 			config->puertoMemoria);
@@ -187,11 +204,13 @@ int iniciar_servidor() {
 		//Caso contrario, alguna operacion E/S en algun otro socket
 		for (i = 0; i < max_clientes; i++) {
 			sd = cliente_socket[i];
+			clean_or_init_buffer(&buffer);
 			if (FD_ISSET(sd, &readfds)) {
-				valorLectura = recv(sd, mensaje, PACKAGESIZE, 0);
+//				valorLectura = recv(sd, mensaje, PACKAGESIZE, 0);
+				buffer = recibir_mensaje(sd);
 
 				//Verificar si fue por cierre, y tambien para leer un mensaje entrante
-				if (valorLectura == 0) {
+				if (buffer.header.tamanio == 0) {
 					//Alguien se desconecto, obtenemos los detalles e imprimimos
 					getpeername(sd,
 							(struct sockaddr*) &master_socket.socket_info,
@@ -202,57 +221,83 @@ int iniciar_servidor() {
 					//Cerrar el socket y marcar como 0 en la lista para reusar
 					close(sd);
 					cliente_socket[i] = 0;
-				}
-				if (valorLectura > 0) {
+				} else if (buffer.header.tamanio > 0) {
 					int j;
-					mensaje[valorLectura] = '\0';
-					tipo_mensaje = mensaje[0];
+//					mensaje[valorLectura] = '\0';
+//					tipo_mensaje = mensaje[0];
 					//printf("MENSAJE: %s\n", mensaje);
-					switch (tipo_mensaje) {
-					case MSJ_HANDSHAKE_CPU:
-						if(mensaje[1] == HANDSHAKE_CPU)
-							EnviarDatos(sd, MSJ_CONFIRMACION);
-						else
-							puts("NEGACION");
-							EnviarDatos(sd, MSJ_NEGACION);
-						break;
-					case MSJ_HANDSHAKE_CONSOLA:
-						if(mensaje[1] == HANDSHAKE_CONSOLA)
-						{
-							puts("ENTRE CON LA CONSOLA");
-							EnviarDatos(sd, MSJ_CONFIRMACION);
+					switch (buffer.header.id_tipo) {
+					case MSJ_HANDSHAKE:
+						printf("Ingreso mensaje handshake\n");
+						t_handshake* v_handshake = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
+						if(string_contains(v_handshake->handshake,HANDSHAKE_CPU)){
+							puts("HANDSHAKE CON LA CPU\n");
+							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
+						}else if(string_contains(v_handshake->handshake,HANDSHAKE_CONSOLA)){
+							puts("HANDSHAKE CON LA CONSOLA\n");
+							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
+						}else{
+							puts("NEGACION\n");
+							enviar_respuesta_handshake(sd, MSJ_NEGACION);
 						}
-						else
-							EnviarDatos(sd, MSJ_NEGACION);
+						free(v_handshake);
+						break;
+					case MSJ_PROGRAMA_ANSISOP:
+						printf("Ingreso mensaje programa AnsiSOp\n",buffer.header.id_tipo);
+						/* Aca se supone que leo el codigo que me enviaron y creo el proceso*/
+						//Deserializo mensaje buffer.data
+						//creo el proceso
+
+						t_programa_ansisop programa_ansisop;
+
+						/* Inicio simulacion de valor random para el PID a devolver */
+						srand(time(NULL));
+						int pid_random = rand();
+						programa_ansisop.pid = pid_random;
+						programa_ansisop.contenido = string_new();
+						/* Fin simulacion */
+
+						int size_mensaje = calcular_tamanio_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP);
+
+						t_buffer* buffer_to_send = serializar_mensajes(&programa_ansisop, MSJ_PROGRAMA_ANSISOP, size_mensaje, sd);
+
+						if(enviar_mensaje(buffer_to_send) == 1){
+							perror("Fallo el envio del PID a la Consola\n");
+						}
+
+						free(programa_ansisop.contenido);
+						free(buffer_to_send->data);
+						free(buffer_to_send);
+
 					break;
 
 					default:
 						/* send to everyone! */
-						for (j = 0; j <= max_sd; j++) {
-							// except the listener and ourselves
-							if (cliente_socket[j] != sd
-									&& cliente_socket[j] != 0) {
-								if (send(cliente_socket[j], mensaje,
-										strlen(mensaje), 0) == -1) {
-									perror("send() error!");
-								} else {
-									printf(
-											"Mensaje enviado con el socket %d \n",
-											cliente_socket[j]);
-								}
-							}
-						}
-						if (send(socket_memoria.socket, mensaje,
-								strlen(mensaje), 0) != strlen(mensaje)) {
-							perror("send memoria failed");
-						}
-						if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
-								!= strlen(mensaje)) {
-							perror("send filesystem failed");
-						}
-						printf("valor lectura: %d\n", valorLectura);
+//						for (j = 0; j <= max_sd; j++) {
+//							// except the listener and ourselves
+//							if (cliente_socket[j] != sd
+//									&& cliente_socket[j] != 0) {
+//								if (send(cliente_socket[j], mensaje,
+//										strlen(mensaje), 0) == -1) {
+//									perror("send() error!");
+//								} else {
+//									printf(
+//											"Mensaje enviado con el socket %d \n",
+//											cliente_socket[j]);
+//								}
+//							}
+//						}
+//						if (send(socket_memoria.socket, mensaje,
+//								strlen(mensaje), 0) != strlen(mensaje)) {
+//							perror("send memoria failed");
+//						}
+//						if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
+//								!= strlen(mensaje)) {
+//							perror("send filesystem failed");
+//						}
+						printf("valor lectura: %d\n", buffer.header.id_tipo);
 						puts(
-								"mensajes a memoria y filesystem enviados correctamente");
+								"mensajes a memoria y filesystem enviados correctamente\n");
 						break;
 					}
 
