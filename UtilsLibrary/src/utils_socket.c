@@ -143,7 +143,7 @@ t_buffer* crear_buffer(uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket)
 	header.tamanio = size;
 	buffer_temp->header = header;
 	buffer_temp->socket = un_socket;
-	buffer_temp->data = malloc(header.tamanio);
+	buffer_temp->data = malloc(sizeof(t_header)+header.tamanio);
 	return buffer_temp;
 }
 
@@ -171,8 +171,8 @@ t_buffer recibir_mensaje(uint32_t un_socket) {
 
 	// Recibir datos y guardarlos en el buffer
 	// Primero recibo el header para saber tipo de mensaje y tamaño
-	printf("Recibo mensaje\n");
 	int bytes_retorno = recv(buffer.socket, buffer.data, lenMensaje, MSG_WAITALL);
+	printf("Recibo header-mensaje, bytes=%d \n",bytes_retorno);
 	if (bytes_retorno == -1) {
 		buffer.header.id_tipo = -1;
 		perror("Error al recibir header\n");
@@ -189,8 +189,9 @@ t_buffer recibir_mensaje(uint32_t un_socket) {
 
 	// Segundo reservar memoria suficiente para el mensaje
 	buffer.data = realloc(buffer.data, buffer.header.tamanio);
-	memset(buffer.data, "\0", buffer.header.tamanio);
+//	memset(buffer.data, "\0", buffer.header.tamanio);
 	int bytesPayload = recv(buffer.socket, buffer.data, buffer.header.tamanio, MSG_WAITALL);
+	printf("Recibo payload-mensaje, bytes=%d \n",bytesPayload);
 	if (bytesPayload == -1) {
 		buffer.header.id_tipo = -1;
 		perror("Error al recibir payload\n");
@@ -210,11 +211,11 @@ t_buffer recibir_mensaje(uint32_t un_socket) {
  *@DESC: Datos ya deben venir serializados
  *@RETURN: Devuelve 1-fallo/false , 0-exito/true
  */
-int enviar_mensaje(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket) {
+int enviar_mensaje(t_buffer* buffer) {
 
-	t_buffer* buffer = serializar_mensajes(data, tipo_mensaje, size, un_socket);
+	int bytes_to_send = sizeof(t_header)+buffer->header.tamanio;
 
-	int bytes = send(buffer->socket, &buffer->data, size, 0);
+	int bytes = send(buffer->socket, buffer->data, bytes_to_send, 0);
 	if (bytes > 0) {
 		printf("Bytes enviados: %d\n", bytes);
 		return 0;
@@ -255,6 +256,7 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 
 		memcpy(buffer->data + offset, handshake->handshake, strlen(handshake->handshake));
 
+		printf("Fin serializacion handshake \n");
 		return buffer;
 	case MSJ_PROGRAMA_ANSISOP:
 		printf("Inicio serializacion programa ansisop \n");
@@ -276,6 +278,7 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 
 		memcpy(buffer->data + offset, programa_ansisop->contenido, strlen(programa_ansisop->contenido));
 
+		printf("Fin serializacion programa ansisop \n");
 		return buffer;
 	default:
 		return buffer;
@@ -293,7 +296,6 @@ void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
 	switch(tipo_mensaje){
 	case MSJ_HEADER:
 		printf("Inicio deserializacion header \n");
-		printf("Alloco %d memoria \n",sizeof(t_header));
 		t_header* header = malloc(sizeof(t_header));
 		uint32_t id_tipo = 0;
 		uint32_t tamanio = 0;
@@ -309,29 +311,31 @@ void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
 		header->id_tipo = htons(id_tipo);
 		header->tamanio = htons(tamanio);
 
+		printf("Fin deserializacion header \n");
+
 		return header;
 	case MSJ_HANDSHAKE:
-		printf("Inicio deserializacion handshake 2\n");
+		printf("Inicio deserializacion handshake \n");
 		t_handshake* handshake = malloc(sizeof(t_handshake));
 
-		offset += sizeof(t_header);
+		handshake->handshake = strdup(stream_buffer);
 
-		handshake->handshake = strdup(stream_buffer + offset);
+		printf("Fin deserializacion handshake \n");
 
 		return handshake;
 	case MSJ_PROGRAMA_ANSISOP:
-		printf("Inicio deserializacion programa ansisop 2\n");
+		printf("Inicio deserializacion programa ansisop \n");
 		t_programa_ansisop* programa_ansisop = malloc(sizeof(t_programa_ansisop));
 
-		offset += sizeof(t_header);
-
-		memcpy(&programa_ansisop->pid, stream_buffer + offset, sizeof(programa_ansisop->pid));
+		memcpy(&programa_ansisop->pid, stream_buffer, sizeof(programa_ansisop->pid));
 		offset += sizeof(programa_ansisop->pid);
 
 		//Network_to_Host
 		programa_ansisop->pid = htons(programa_ansisop->pid);
 
 		programa_ansisop->contenido = strdup(stream_buffer + offset);
+
+		printf("Fin deserializacion programa ansisop \n");
 
 		return programa_ansisop;
 

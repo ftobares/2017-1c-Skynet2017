@@ -44,6 +44,7 @@ int primera_ejecucion = 1;
 
 /* Declaracion de funciones */
 void connect_to_kernel();
+void disconnect_kernel();
 int hilo_lector_interfaz_usuario();
 void hilo_manager_programa();
 void hilo_procesar_operacion(void* tipo_operacion);
@@ -88,6 +89,11 @@ int main(int argc, char* argv) {
 	return 0;
 }
 
+void disconnect_kernel(){
+	freeaddrinfo(server_socket.socket_info);
+	close(server_socket.socket);
+}
+
 void connect_to_kernel(){
 
 	/* leer archivo config */
@@ -96,6 +102,7 @@ void connect_to_kernel(){
 	file_path = string_new();
 	string_append(&file_path, "./src/consola.config");
 	config = cargar_configuracion(file_path, TIPO_PROYECTO);
+	free(file_path);
 
 	/* Handshake */
 	printf("Hacer handshake con Kernel\n");
@@ -115,52 +122,60 @@ void connect_to_kernel(){
 	if (AUX_CONEC_KER == saludar(server_socket.socket)) {
 		printf("Handshake Exitoso! \n");
 	}else{
+		disconnect_kernel();
 		exit(-1);
 	}
 
 	connect(server_socket.socket, server_socket.socket_info->ai_addr,
 			server_socket.socket_info->ai_addrlen);
 
-	freeaddrinfo(server_socket.socket_info); // No lo necesitamos mas
-	printf("CONECTADO AL KERNEL: %d", server_socket.socket);
+	printf("CONECTADO AL KERNEL: %d\n", server_socket.socket);
 }
 
 int saludar(int sRemoto) {
 
-	int aux;
+	printf("Inicio saludar\n");
 
-	t_handshake handshake_message;
-	handshake_message.handshake = string_new();
-	string_append(&handshake_message.handshake, "C");
-	int size_mensaje = calcular_tamanio_mensaje(&handshake_message, MSJ_HANDSHAKE);
+	t_handshake mensaje_a_enviar;
+	mensaje_a_enviar.handshake = string_new();
+	string_append(&mensaje_a_enviar.handshake, "C");
+	int size_mensaje = calcular_tamanio_mensaje(&mensaje_a_enviar, MSJ_HANDSHAKE);
 
-	if(enviar_mensaje(&handshake_message, MSJ_HANDSHAKE, size_mensaje, sRemoto) == 1){
-		perror("Fallo el envio del mensaje handshake con Kernel");
+	t_buffer* buffer_to_send = serializar_mensajes(&mensaje_a_enviar, MSJ_HANDSHAKE, size_mensaje, sRemoto);
+
+	if(enviar_mensaje(buffer_to_send) == 1){
+		perror("Fallo el envio del mensaje handshake con Kernel\n");
 	}
 
-	t_buffer buffer;
-	buffer = recibir_mensaje(sRemoto);
+	//destroy buffer
+	free(mensaje_a_enviar.handshake);
+	free(buffer_to_send->data);
+	free(buffer_to_send);
 
-	if(buffer.header.id_tipo == MSJ_HANDSHAKE){
-		realloc(handshake_message.handshake, buffer.header.tamanio);
-		memset(&handshake_message, 0, buffer.header.tamanio);
-		handshake_message.handshake = deserializar_mensaje(buffer.data, MSJ_HANDSHAKE);
+	t_buffer buffer_to_rcv;
+	t_handshake* mensaje_retorno;
+	buffer_to_rcv = recibir_mensaje(sRemoto);
+
+	if(buffer_to_rcv.header.id_tipo == MSJ_HANDSHAKE){
+		mensaje_retorno = deserializar_mensaje(buffer_to_rcv.data, MSJ_HANDSHAKE);
 	}else{
-		perror("Error al recibir OK del Kernel, tipo mensaje incorrecto");
+		perror("Error al recibir OK del Kernel, tipo mensaje incorrecto\n");
+		return -1;
 	}
 
-	if (!(string_starts_with(handshake_message.handshake, OK)))
+	if (!(string_starts_with(mensaje_retorno->handshake, OK)))
 	{
 		printf("ERROR: HANDSHAKE NO FUE EXITOSO \n");
-		aux = -1;
+		return -1;
 	}
-	else
-		aux = 0;
 
-	free(handshake_message.handshake);
-	free(buffer.data);
+	free(mensaje_retorno->handshake);
+	free(mensaje_retorno);
+	free(buffer_to_rcv.data);
 
-	return aux;
+	printf("Fin saludar\n");
+
+	return 0;
 }
 
 /* FUNCIONES INTERFAZ */
@@ -364,9 +379,11 @@ int enviar_codigo(int socket, char* path){
 	archivo->pid = 0;
 	int size_mensaje = calcular_tamanio_mensaje(archivo, MSJ_PROGRAMA_ANSISOP);
 
+	t_buffer* buffer_to_send = serializar_mensajes(archivo, MSJ_PROGRAMA_ANSISOP, size_mensaje, socket);
+
 	/* Enviar el programa al Kernel, para crear el proceso*/
-	if(enviar_mensaje(archivo, MSJ_PROGRAMA_ANSISOP, size_mensaje, socket) == 1){
-		perror("Fallo envio del archivo al Kernel");
+	if(enviar_mensaje(buffer_to_send) == 1){
+		perror("Fallo envio del archivo al Kernel\n");
 	}
 
 	/* Recibir el PID del proceso creado*/
@@ -377,7 +394,7 @@ int enviar_codigo(int socket, char* path){
 	if(buffer.header.id_tipo == MSJ_PROGRAMA_ANSISOP){
 		archivo->pid = deserializar_mensaje(buffer.data, MSJ_PROGRAMA_ANSISOP);
 	}else{
-		perror("Error al recibir PID del proceso creado por el Kernel, tipo mensaje incorrecto");
+		perror("Error al recibir PID del proceso creado por el Kernel, tipo mensaje incorrecto\n");
 	}
 
 	return archivo->pid;

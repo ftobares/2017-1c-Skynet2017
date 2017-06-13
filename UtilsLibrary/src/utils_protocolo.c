@@ -19,12 +19,12 @@ uint32_t calcular_tamanio_mensaje(void* p_mensaje, uint32_t tipo_mensaje) {
 	case MSJ_HANDSHAKE:
 		printf("Calcular tamaño Handshake\n");
 		t_handshake* handshake = (struct t_handshake*) p_mensaje;
-		size = sizeof(t_header)+strlen(handshake->handshake)+1;
+		size = strlen(handshake->handshake)+1;
 		return size;
 	case MSJ_PROGRAMA_ANSISOP:
 		printf("Calcular tamaño Programa AnsiSOp\n");
 		t_programa_ansisop* programa_ansisop = (struct t_programa_ansisop*) p_mensaje;
-		size = sizeof(t_header)+sizeof(programa_ansisop->pid)+strlen(programa_ansisop->contenido)+1;
+		size = sizeof(programa_ansisop->pid)+strlen(programa_ansisop->contenido)+1;
 		return size;
 	default:
 		return 0;

@@ -94,7 +94,7 @@ t_buffer recibir_mensaje(uint32_t un_socket);
  *@DESC: Datos ya deben venir serializados
  *@RETURN: Devuelve 1-fallo/false , 0-exito/true
  */
-int enviar_mensaje(void* data, uint32_t tipo_mensaje, uint32_t size, uint32_t un_socket);
+int enviar_mensaje(t_buffer* buffer);
 
 /*@NAME: serializar_mensajes
  *@DESC: La funcion pone en el buffer todos los datos a ser enviados,

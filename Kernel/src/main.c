@@ -22,12 +22,16 @@
 #define FALSE 0
 #define CantClientes 30
 #define TIPO_PROYECTO 4
-#define MSJ_HANDSHAKE 3
-#define MSJ_PROGRAMA_ANSISOP 4
+
+#define MSJ_HEADER 1
+#define MSJ_HANDSHAKE 2
+#define MSJ_PROGRAMA_ANSISOP 3
+#define MSJ_PCB 4
+
 #define MSJ_CONFIRMACION "1"
 #define MSJ_NEGACION     "0"
-#define HANDSHAKE_CPU 'H'
-#define HANDSHAKE_CONSOLA 'C'
+#define HANDSHAKE_CPU "H"
+#define HANDSHAKE_CONSOLA "C"
 //Variables Globales
 t_kernel_config* config;
 t_socket socket_memoria;
@@ -89,16 +93,23 @@ int main(int argc, char** argv) {
 	return v_valor_retorno;
 }
 
-void enviar_respuesta_handshake(int socket, void *buffer) {
-	int bytecount;
+void enviar_respuesta_handshake(int socket, char* buffer) {
 	t_handshake temp_handshake;
 	temp_handshake.handshake = string_new();
-	string_append(temp_handshake.handshake, buffer);
-	int size_mensaje = calcular_tamanio_mensaje(temp_handshake.handshake, MSJ_HANDSHAKE);
+	string_append(&temp_handshake.handshake, buffer);
+	int size_mensaje = calcular_tamanio_mensaje(&temp_handshake.handshake, MSJ_HANDSHAKE);
 
-	if(enviar_mensaje(&temp_handshake, MSJ_HANDSHAKE, size_mensaje, socket) == 1){
+	printf("Mensaje a serializar %s\n", temp_handshake.handshake);
+	t_buffer* buffer_to_send = serializar_mensajes(&temp_handshake, MSJ_HANDSHAKE, size_mensaje, socket);
+
+	if(enviar_mensaje(buffer_to_send) == 1){
 		perror("No puedo enviar información al/los cliente/s");
 	}
+
+	//destroy buffer
+	free(temp_handshake.handshake);
+	free(buffer_to_send->data);
+	free(buffer_to_send);
 }
 
 //void inicializarPCB(int pID,char* codigoAnsisop) {
@@ -247,9 +258,14 @@ int iniciar_servidor() {
 
 						int size_mensaje = calcular_tamanio_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP);
 
-						if(enviar_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP, size_mensaje, sd) == 1){
+						t_buffer* buffer_to_send = serializar_mensajes(&programa_ansisop, MSJ_PROGRAMA_ANSISOP, size_mensaje, sd);
+
+						if(enviar_mensaje(buffer_to_send) == 1){
 							perror("Fallo el envio del PID a la Consola\n");
 						}
+
+						free(buffer_to_send->data);
+						free(buffer_to_send);
 
 					break;
 
