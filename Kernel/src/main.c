@@ -231,10 +231,10 @@ int iniciar_servidor() {
 						printf("Ingreso mensaje handshake\n");
 						t_handshake* v_handshake = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
 						if(string_contains(v_handshake->handshake,HANDSHAKE_CPU)){
-							puts("ENTRE CON LA CPU\n");
+							puts("HANDSHAKE CON LA CPU\n");
 							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
 						}else if(string_contains(v_handshake->handshake,HANDSHAKE_CONSOLA)){
-							puts("ENTRE CON LA CONSOLA\n");
+							puts("HANDSHAKE CON LA CONSOLA\n");
 							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
 						}else{
 							puts("NEGACION\n");
@@ -254,6 +254,7 @@ int iniciar_servidor() {
 						srand(time(NULL));
 						int pid_random = rand();
 						programa_ansisop.pid = pid_random;
+						programa_ansisop.contenido = string_new();
 						/* Fin simulacion */
 
 						int size_mensaje = calcular_tamanio_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP);
@@ -264,6 +265,7 @@ int iniciar_servidor() {
 							perror("Fallo el envio del PID a la Consola\n");
 						}
 
+						free(programa_ansisop.contenido);
 						free(buffer_to_send->data);
 						free(buffer_to_send);
 

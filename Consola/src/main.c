@@ -64,29 +64,199 @@ int main(int argc, char* argv) {
 	pthread_t thread_programa_id;
 	pthread_attr_t thread_programa_attr;
 
-	/* Inicializo semaforos  */
-//	sem_init(&sem_tipo_operacion, 0, 1);
-//	sem_init(&sem_hay_instruccion, 0, 0);
-//	sem_init(&sem_primera_ejecucion, 0, 1);
-
 	connect_to_kernel();
 
+	/* Inicializo semaforos  */
+	sem_init(&sem_tipo_operacion, 0, 1);
+	sem_init(&sem_hay_instruccion, 0, 0);
+	sem_init(&sem_primera_ejecucion, 0, 1);
+
 	/* Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)  */
-//	pthread_attr_init(&thread_usuario_attr);
-//	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
+	pthread_attr_init(&thread_usuario_attr);
+	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
 
 	/* Creo un hilo encargado de manejar los hilos que realizan las operaciones (Programa)  */
-//	pthread_attr_init(&thread_programa_attr);
-//	pthread_create(&thread_programa_id, &thread_programa_attr, &hilo_manager_programa, NULL);
+	pthread_attr_init(&thread_programa_attr);
+	pthread_create(&thread_programa_id, &thread_programa_attr, &hilo_manager_programa, NULL);
 
-//	pthread_join(thread_usuario_id, NULL);
-//	pthread_join(thread_programa_id, NULL);
+	pthread_join(thread_usuario_id, NULL);
+	pthread_join(thread_programa_id, NULL);
 
-//	sem_destroy(&sem_tipo_operacion);
-//	sem_destroy(&sem_hay_instruccion);
-//	sem_destroy(&sem_primera_ejecucion);
+	sem_destroy(&sem_tipo_operacion);
+	sem_destroy(&sem_hay_instruccion);
+	sem_destroy(&sem_primera_ejecucion);
 
 	return 0;
+}
+
+/* FUNCIONES INTERFAZ */
+int hilo_lector_interfaz_usuario(){
+	printf("Inicio hilo_lector_interfaz_usuario \n");
+
+	char mensaje[INPUTSIZE];
+	sem_init(&sem_path_archivo, 0, 1);
+
+	while(true){
+		printf("Consola iniciada ingrese la operación que desea realizar, exit para salir:\n");
+
+		/* Espero por ingreso de instrucciones  */
+		fgets(mensaje, 100, stdin);
+
+		if(strncmp(mensaje, INICIAR, strlen(INICIAR)) == 0){
+
+			sem_wait(&sem_tipo_operacion);
+			tipo_operacion = 1;
+			sem_wait(&sem_path_archivo);
+			char** str_separado = string_n_split(mensaje, 3, " ");
+			path_archivo_a_enviar = str_separado[1];
+			path_archivo_a_enviar[strlen(path_archivo_a_enviar)-1]=0;
+			printf("El path es %s \n", path_archivo_a_enviar);
+			free(str_separado);
+			sem_post(&sem_hay_instruccion);
+			sem_post(&sem_tipo_operacion);
+
+		} else if (strncmp(mensaje, FINALIZAR, strlen(FINALIZAR)) == 0) {
+
+			sem_wait(&sem_tipo_operacion);
+			tipo_operacion = 2;
+			char** str_separado = string_n_split(mensaje, 3, " ");
+			pid_proceso = str_separado[1];
+			printf("El PID del proceso a finalizar es %s \n", pid_proceso);
+			free(str_separado);
+			sem_post(&sem_hay_instruccion);
+			sem_post(&sem_tipo_operacion);
+
+		} else if (strncmp(mensaje, DESCONECTAR, strlen(DESCONECTAR)) == 0){
+
+			sem_wait(&sem_tipo_operacion);
+			tipo_operacion = 3;
+			printf("Desconecto consola del kernel \n");
+			disconnect_kernel();
+			sem_post(&sem_hay_instruccion);
+			sem_post(&sem_tipo_operacion);
+
+		} else if (strncmp(mensaje, LIMPIAR, strlen(LIMPIAR)) == 0) {
+			tipo_operacion = 4;
+		} else if (strncmp(mensaje, SALIR, strlen(SALIR)) == 0) {
+			printf("Desconecto y cierro consola. \n");
+			disconnect_kernel();
+			sem_destroy(&sem_path_archivo);
+			printf("Fin hilo_lector_interfaz_usuario \n");
+			return 0;
+		} else {
+			printf("## ERROR ## Operacion no valida ## \n");
+		}
+	}
+
+	sem_destroy(&sem_path_archivo);
+	printf("Fin hilo_lector_interfaz_usuario \n");
+	return 0;
+}
+
+int hilo_escritor_interfaz_usuario(void* pid){
+
+	printf("Inicio hilo_escritor_interfaz_usuario \n");
+
+	int v_pid = (int)pid;
+
+	/* SIMULO RECIBIR DATOS DEL PROCESO CREADO POR EL KERNEL */
+	struct timespec tim, tim2;
+	tim.tv_sec = 2;
+	tim.tv_nsec = 500;
+
+	int i = 0;
+	for(i; i <= 50;i+=1){
+		if(nanosleep(&tim , &tim2) < 0 ) {
+		      printf("Nano sleep system call failed \n");
+		}
+
+		printf("Recibiendo datos de proceso pid=%d iteracion n°%i\n",v_pid, i);
+	}
+
+	printf("Fin hilo_escritor_interfaz_usuario \n");
+
+	return 0;
+}
+
+/* FUNCIONES PROGRAMA */
+void hilo_manager_programa() {
+	printf("Inicio hilo_manager_programa \n");
+
+	while(true){
+
+		sem_wait(&sem_hay_instruccion);
+
+		switch(tipo_operacion){
+		case 1:
+			printf("creo hilo iniciar programa \n");
+
+			pthread_t th_operacion_id;
+			pthread_attr_t th_operacion_attr;
+
+			pthread_attr_init(&th_operacion_attr);
+			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
+
+			break;
+		case 2:
+			printf("creo hilo finalizar programa\n");
+
+			pthread_attr_init(&th_operacion_attr);
+			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
+
+			break;
+		case 3:
+			printf("creo hilo desconectar consola\n");
+
+			pthread_attr_init(&th_operacion_attr);
+			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
+
+			break;
+		case 4:
+			printf("creo hilo limpiar mensajes\n");
+
+			pthread_attr_init(&th_operacion_attr);
+			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
+
+			break;
+		default:
+			printf("operacion no valida\n");
+		}
+	}
+
+	printf("Fin hilo_manager_programa \n");
+}
+
+void hilo_procesar_operacion(void* tipo_operacion){
+	printf("Inicio hilo_procesar_operacion \n");
+
+	int v_tipo_operacion = (int)tipo_operacion;
+	switch(v_tipo_operacion){
+	case 1:
+		printf("hilo_procesar_operacion tipo_operacion=%i\n",v_tipo_operacion);
+		pthread_t th_iniciar_proceso_id;
+		pthread_attr_t th_iniciar_proceso_attr;
+		char* path = string_new();
+		string_append(&path,path_archivo_a_enviar);
+		sem_post(&sem_path_archivo);
+
+		int v_pid = enviar_codigo(server_socket.socket, path);
+		free(path);
+		if(v_pid == -1){
+			perror("Fallo el envio del codigo al Kernel");
+			break;
+		}
+
+		//crear hilo de espera por mensajes proceso e imprimir por pantalla
+		pthread_attr_init(&th_iniciar_proceso_attr);
+		pthread_create(&th_iniciar_proceso_id, &th_iniciar_proceso_attr, &hilo_escritor_interfaz_usuario, v_pid);
+		break;
+	case 2:
+		printf("hilo_procesar_operacion tipo_operacion=%i\n",v_tipo_operacion);
+		break;
+	default:
+		printf("hilo_procesar_operacion - operacion invalida\n");
+	}
+	printf("Fin hilo_procesar_operacion \n");
 }
 
 void disconnect_kernel(){
@@ -178,172 +348,6 @@ int saludar(int sRemoto) {
 	return 0;
 }
 
-/* FUNCIONES INTERFAZ */
-int hilo_lector_interfaz_usuario(){
-	printf("Inicio hilo_lector_interfaz_usuario \n");
-
-	char mensaje[INPUTSIZE];
-	sem_init(&sem_path_archivo, 0, 1);
-
-	while(true){
-		printf("Consola iniciada ingrese la operación que desea realizar, exit para salir:\n");
-
-		/* Espero por ingreso de instrucciones  */
-		fgets(mensaje, 100, stdin);
-
-		if(strncmp(mensaje, INICIAR, strlen(INICIAR)) == 0){
-
-			sem_wait(&sem_tipo_operacion);
-			tipo_operacion = 1;
-			sem_wait(&sem_path_archivo);
-			char** str_separado = string_n_split(mensaje, 3, " ");
-			path_archivo_a_enviar = str_separado[1];
-			printf("El path es %s \n", path_archivo_a_enviar);
-			sem_post(&sem_hay_instruccion);
-			sem_post(&sem_tipo_operacion);
-
-		} else if (strncmp(mensaje, FINALIZAR, strlen(FINALIZAR)) == 0) {
-
-			sem_wait(&sem_tipo_operacion);
-			tipo_operacion = 2;
-			sem_wait(&sem_path_archivo);
-			char** str_separado = string_n_split(mensaje, 3, " ");
-			pid_proceso = str_separado[1];
-			printf("El PID del proceso a finalizar es %s \n", pid_proceso);
-			sem_post(&sem_hay_instruccion);
-			sem_post(&sem_tipo_operacion);
-
-		} else if (strncmp(mensaje, DESCONECTAR, strlen(DESCONECTAR)) == 0){
-
-			sem_wait(&sem_tipo_operacion);
-			tipo_operacion = 3;
-			sem_wait(&sem_path_archivo);
-			char** str_separado = string_n_split(mensaje, 3, " ");
-			pid_proceso = str_separado[1];
-			printf("El PID del proceso a finalizar es %s \n", pid_proceso);
-			sem_post(&sem_hay_instruccion);
-			sem_post(&sem_tipo_operacion);
-
-		} else if (strncmp(mensaje, LIMPIAR, strlen(LIMPIAR)) == 0) {
-			tipo_operacion = 4;
-		} else if (strncmp(mensaje, SALIR, strlen(SALIR)) == 0) {
-			return 0;
-		} else {
-			printf("## ERROR ## Operacion no valida ## \n");
-		}
-	}
-
-	sem_destroy(&sem_path_archivo);
-	printf("Fin hilo_lector_interfaz_usuario \n");
-	return 0;
-}
-
-int hilo_escritor_interfaz_usuario(void* pid){
-
-	printf("Inicio hilo_escritor_interfaz_usuario \n");
-
-	int v_pid = (int)pid;
-
-	struct timespec tim, tim2;
-	tim.tv_sec = 1;
-	tim.tv_nsec = 500;
-
-	int i = 0;
-	for(i; i <= 50;i+=1){
-		if(nanosleep(&tim , &tim2) < 0 ) {
-		      printf("Nano sleep system call failed \n");
-		}
-
-		printf("Recibiendo datos de proceso pid=%d iteracion n°%i\n",v_pid, i);
-	}
-
-	printf("Fin hilo_escritor_interfaz_usuario \n");
-
-	return 0;
-}
-
-
-/* FUNCIONES PROGRAMA */
-void hilo_manager_programa() {
-	printf("Inicio hilo_manager_programa \n");
-
-	while(true){
-
-		sem_wait(&sem_hay_instruccion);
-
-		switch(tipo_operacion){
-		case 1:
-			printf("creo hilo iniciar programa \n");
-
-			pthread_t th_operacion_id;
-			pthread_attr_t th_operacion_attr;
-
-			pthread_attr_init(&th_operacion_attr);
-			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
-
-			break;
-		case 2:
-			printf("creo hilo finalizar programa\n");
-
-			pthread_attr_init(&th_operacion_attr);
-			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
-
-			break;
-		case 3:
-			printf("creo hilo desconectar consola\n");
-
-			pthread_attr_init(&th_operacion_attr);
-			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
-
-			break;
-		case 4:
-			printf("creo hilo limpiar mensajes\n");
-
-			pthread_attr_init(&th_operacion_attr);
-			pthread_create(&th_operacion_id, &th_operacion_attr, &hilo_procesar_operacion, tipo_operacion);
-
-			break;
-		default:
-			printf("operacion no valida\n");
-		}
-	}
-
-	printf("Fin hilo_manager_programa \n");
-}
-
-void hilo_procesar_operacion(void* tipo_operacion){
-	printf("Inicio hilo_procesar_operacion \n");
-
-	int v_tipo_operacion = (int)tipo_operacion;
-	switch(v_tipo_operacion){
-	case 1:
-		printf("hilo_procesar_operacion tipo_operacion=%i\n",v_tipo_operacion);
-		pthread_t th_iniciar_proceso_id;
-		pthread_attr_t th_iniciar_proceso_attr;
-		char* path = path_archivo_a_enviar;
-		sem_post(&sem_path_archivo);
-
-		int v_pid = enviar_codigo(server_socket.socket, path);
-		if(v_pid == -1){
-			perror("Fallo el envio del codigo al Kernel");
-		}
-
-		//recibir pid
-		printf("recibir pid de proceso\n");
-
-		//crear hilo de espera por mensajes proceso e imprimir por pantalla
-		pthread_attr_init(&th_iniciar_proceso_attr);
-		pthread_create(&th_iniciar_proceso_id, &th_iniciar_proceso_attr, &hilo_escritor_interfaz_usuario, v_pid);
-		break;
-	case 2:
-		printf("hilo_procesar_operacion tipo_operacion=%i\n",v_tipo_operacion);
-		break;
-	default:
-		printf("hilo_procesar_operacion - operacion invalida\n");
-	}
-	printf("Fin hilo_procesar_operacion \n");
-}
-
 t_programa_ansisop* crear_y_cargar_archivo(char* path){
 	FILE* file = fopen(path, "r");
 
@@ -384,7 +388,14 @@ int enviar_codigo(int socket, char* path){
 	/* Enviar el programa al Kernel, para crear el proceso*/
 	if(enviar_mensaje(buffer_to_send) == 1){
 		perror("Fallo envio del archivo al Kernel\n");
+		return -1;
 	}
+
+	//Libero memoria
+	free(archivo->contenido);
+	free(archivo);
+	free(buffer_to_send->data);
+	free(buffer_to_send);
 
 	/* Recibir el PID del proceso creado*/
 	t_buffer buffer;
@@ -392,10 +403,12 @@ int enviar_codigo(int socket, char* path){
 
 	/* Deserializo mensaje */
 	if(buffer.header.id_tipo == MSJ_PROGRAMA_ANSISOP){
-		archivo->pid = deserializar_mensaje(buffer.data, MSJ_PROGRAMA_ANSISOP);
+		archivo = deserializar_mensaje(buffer.data, MSJ_PROGRAMA_ANSISOP);
 	}else{
 		perror("Error al recibir PID del proceso creado por el Kernel, tipo mensaje incorrecto\n");
+		return -1;
 	}
+	free(archivo->contenido);//Libero porque no lo uso... analizar si conviene dejarlo por si acaso y liberar luego.
 
 	return archivo->pid;
 }
