@@ -280,6 +280,26 @@ t_buffer* serializar_mensajes(void* data, uint32_t tipo_mensaje, uint32_t size, 
 
 		printf("Fin serializacion programa ansisop \n");
 		return buffer;
+	case MSJ_FINALIZAR_PROGRAMA:
+		printf("Inicio serializacion programa a finalizar\n");
+		t_programa_ansisop* programa_finalizar = (struct t_programa_ansisop*) data;
+
+		//Host to Network
+		id_tipo = htons(buffer->header.id_tipo);
+		tamanio = htons(buffer->header.tamanio);
+		uint32_t pid_finalizar = htons(programa_finalizar->pid);
+
+		memcpy(buffer->data, &id_tipo, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &tamanio, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		memcpy(buffer->data + offset, &pid_finalizar, sizeof(uint32_t));
+		offset += sizeof(uint32_t);
+
+		printf("Fin serializacion programa a finalizar \n");
+		return buffer;
 	default:
 		return buffer;
 	}
@@ -339,6 +359,18 @@ void* deserializar_mensaje(char* stream_buffer, uint32_t tipo_mensaje) {
 
 		return programa_ansisop;
 
+	case MSJ_FINALIZAR_PROGRAMA:
+		printf("Inicio deserializacion programa a finalizar \n");
+
+		t_programa_ansisop* programa_finalizar = malloc(sizeof(t_programa_ansisop));
+
+		memcpy(&programa_finalizar->pid, stream_buffer, sizeof(programa_finalizar->pid));
+
+		//Network_to_Host
+		programa_finalizar->pid = htons(programa_finalizar->pid);
+
+		printf("Fin deserializacion programa a finalizar \n");
+		return programa_finalizar;
 	default:
 		return NULL;
 	}

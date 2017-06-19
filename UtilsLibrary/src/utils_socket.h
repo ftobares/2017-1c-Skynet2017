@@ -17,6 +17,7 @@
 #define MSJ_HANDSHAKE 2
 #define MSJ_PROGRAMA_ANSISOP 3
 #define MSJ_PCB 4
+#define MSJ_FINALIZAR_PROGRAMA 5
 
 //Estructuras genericas
 typedef struct {

@@ -27,6 +27,7 @@
 #define MSJ_HANDSHAKE 2
 #define MSJ_PROGRAMA_ANSISOP 3
 #define MSJ_PCB 4
+#define MSJ_FINALIZAR_PROGRAMA 5
 
 #define MSJ_CONFIRMACION "1"
 #define MSJ_NEGACION     "0"
@@ -268,6 +269,16 @@ int iniciar_servidor() {
 						free(programa_ansisop.contenido);
 						free(buffer_to_send->data);
 						free(buffer_to_send);
+
+					break;
+
+					case MSJ_FINALIZAR_PROGRAMA:
+						printf("Ingreso mensaje finalizar programa AnsiSOp\n",buffer.header.id_tipo);
+						t_programa_ansisop* programa_finalizar = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
+
+						printf("Finalizo programa con PID %i\n",programa_finalizar->pid);
+
+						free(programa_finalizar);
 
 					break;
 
