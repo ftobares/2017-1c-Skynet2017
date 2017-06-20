@@ -38,6 +38,7 @@
 #define LIMPIAR "limpiar_mensajes"
 #define SALIR "exit"
 #define OK "1"
+#define DEBUG "debug"
 
 /* Variables Globales */
 t_console_config* config;
@@ -46,6 +47,7 @@ sem_t sem_tipo_operacion;
 sem_t sem_hay_instruccion;
 sem_t sem_path_archivo;
 sem_t sem_pid_proceso;
+sem_t sem_lista_procesos;
 int tipo_operacion = 0;
 char* path_archivo_a_enviar;
 int pid_proceso;
@@ -60,7 +62,9 @@ void hilo_manager_programa();
 void hilo_procesar_operacion(void* tipo_operacion);
 int hilo_escritor_interfaz_usuario();
 int enviar_codigo();
+bool es_igual_a(void* elemento);
 t_programa_ansisop* crear_y_cargar_archivo(char* path);
+void finalizar_proceso(int p_pid);
 
 int main(int argc, char* argv) {
 
@@ -74,19 +78,17 @@ int main(int argc, char* argv) {
 	pthread_t thread_programa_id;
 	pthread_attr_t thread_programa_attr;
 
-	connect_to_kernel();
-
 	/* Inicializo semaforos  */
 	sem_init(&sem_tipo_operacion, 0, 1);
 	sem_init(&sem_hay_instruccion, 0, 0);
 
-	/* Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)  */
-	pthread_attr_init(&thread_usuario_attr);
-	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
-
 	/* Creo un hilo encargado de manejar los hilos que realizan las operaciones (Programa)  */
 	pthread_attr_init(&thread_programa_attr);
 	pthread_create(&thread_programa_id, &thread_programa_attr, &hilo_manager_programa, NULL);
+
+	/* Creo un hilo encargado de la lectura de instrucciones (Interfaz Usuario)  */
+	pthread_attr_init(&thread_usuario_attr);
+	pthread_create(&thread_usuario_id, &thread_usuario_attr, &hilo_lector_interfaz_usuario, NULL);
 
 	//Hace falta??
 	pthread_join(thread_usuario_id, NULL);
@@ -95,7 +97,8 @@ int main(int argc, char* argv) {
 	return 0;
 }
 
-/* FUNCIONES INTERFAZ */
+/* Hilo encargado de la interfaz, captura comandos
+ * y mediante semaforos activa los flags de instruccion y tipo de operacion */
 void hilo_lector_interfaz_usuario(){
 	printf("Inicio hilo_lector_interfaz_usuario \n");
 
@@ -103,6 +106,7 @@ void hilo_lector_interfaz_usuario(){
 	lista_procesos = list_create();
 	sem_init(&sem_path_archivo, 0, 1);
 	sem_init(&sem_pid_proceso, 0, 1);
+	sem_init(&sem_lista_procesos, 0, 1);
 
 	while(true){
 		printf("Consola iniciada ingrese la operación que desea realizar, exit para salir:\n");
@@ -112,6 +116,7 @@ void hilo_lector_interfaz_usuario(){
 
 		if(strncmp(mensaje, INICIAR, strlen(INICIAR)) == 0){
 
+			/* Inicio un nuevo programa pasandole el path del codigo */
 			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = OPERACION_INICIAR;
 			sem_wait(&sem_path_archivo);
@@ -125,6 +130,7 @@ void hilo_lector_interfaz_usuario(){
 
 		} else if (strncmp(mensaje, FINALIZAR, strlen(FINALIZAR)) == 0) {
 
+			/* Finalizo un nuevo programa pasandole el PID del proceso */
 			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = OPERACION_FINALIZAR;
 			sem_wait(&sem_pid_proceso);
@@ -139,16 +145,19 @@ void hilo_lector_interfaz_usuario(){
 
 		} else if (strncmp(mensaje, DESCONECTAR, strlen(DESCONECTAR)) == 0){
 
+			/* Desconecto la consola del Kernel.
+			 * Finalizo procesos que estan en ejecucion*/
 			sem_wait(&sem_tipo_operacion);
 			tipo_operacion = OPERACION_DESCONECTAR;
 			printf("Desconecto consola del kernel \n");
-			/* Enviar mensaje a Kernel para que finalize todos los procesos */
+			list_iterate(lista_procesos, finalizar_proceso);
 			disconnect_kernel();
 			sem_post(&sem_hay_instruccion);
 			sem_post(&sem_tipo_operacion);
 
 		} else if (strncmp(mensaje, LIMPIAR, strlen(LIMPIAR)) == 0) {
 
+			/* Limpio la consola -NO ANDA */
 			sem_wait(&sem_tipo_operacion);
 			printf("Limpio la consola del kernel \n");
 			tipo_operacion = OPERACION_LIMPIAR;
@@ -156,14 +165,31 @@ void hilo_lector_interfaz_usuario(){
 			sem_post(&sem_tipo_operacion);
 
 		} else if (strncmp(mensaje, SALIR, strlen(SALIR)) == 0) {
+
+			/* Cierro la consola.
+			 * Finalizo procesos en ejecucion.
+			 * Desconecto del Kernel y libero memoria asignada */
 			printf("Desconecto y cierro consola. \n");
+			list_iterate(lista_procesos, finalizar_proceso);
 			clean_destroy_close();
+		} else if (strncmp(mensaje, DEBUG, strlen(DEBUG)) == 0) {
+			/* Para debuggear, lo uso para imprimir
+			 * por pantalla algun valor en especial.
+			 * Ej: La lista de procesos en ejecucion */
+			printf("Entrada para debug\n");
+			void imprimir_elementos(void* elemento){
+				int element = elemento;
+				printf("PID: %d\n",element);
+			}
+			list_iterate(lista_procesos, imprimir_elementos);
 		} else {
 			printf("## ERROR ## Operacion no valida ## \n");
 		}
 	}
 }
 
+/* Hilo encargado de imprimir por pantalla
+ * la informacion que mande el proceso asignado */
 int hilo_escritor_interfaz_usuario(void* pid){
 
 	printf("Inicio hilo_escritor_interfaz_usuario \n");
@@ -173,7 +199,7 @@ int hilo_escritor_interfaz_usuario(void* pid){
 
 	/* SIMULO RECIBIR DATOS DEL PROCESO CREADO POR EL KERNEL */
 	struct timespec tim, tim2;
-	tim.tv_sec = 0;
+	tim.tv_sec = 5;
 	tim.tv_nsec = 500;
 
 	int i = 0;
@@ -191,14 +217,19 @@ int hilo_escritor_interfaz_usuario(void* pid){
 //		}
 	}
 
-	printf("Fin hilo_escritor_interfaz_usuario \n");
+	printf("Fin hilo_escritor_interfaz_usuario PID %i\n", v_pid);
 
 	return 0;
 }
 
-/* FUNCIONES PROGRAMA */
+/* Hilo encargado de ejecutar las
+ * operaciones indicadas por el hilo interfaz.
+ * Segun la operacion, general threads nuevos
+ * para no generar demoras */
 void hilo_manager_programa() {
 	printf("Inicio hilo_manager_programa \n");
+
+	connect_to_kernel();
 
 	while(true){
 
@@ -238,6 +269,41 @@ void hilo_manager_programa() {
 	}
 }
 
+/* Funcion encargada de decirle al Kernel
+ * que finalize un proceso */
+void finalizar_proceso(int p_pid){
+	t_programa_ansisop* archivo = malloc(sizeof(t_programa_ansisop));
+	archivo->pid = p_pid;
+	int size_mensaje = calcular_tamanio_mensaje(archivo, MSJ_FINALIZAR_PROGRAMA);
+
+	t_buffer* buffer_to_send = serializar_mensajes(archivo, MSJ_FINALIZAR_PROGRAMA, size_mensaje, server_socket.socket);
+
+	/* Enviar el pid al Kernel, para que lo finalize */
+	if(enviar_mensaje(buffer_to_send) == 1){
+		perror("Fallo el envio de solicitud de finalizar programa al Kernel\n");
+	}else{
+		/* Quito de la lista el proceso finalizado */
+		sem_wait(&sem_lista_procesos);
+		bool es_proceso_finalizado(void* element){
+			int elemento = element;
+			if(elemento == p_pid){
+				return true;
+			}else{
+				return false;
+			}
+		}
+		int elemento_eliminado = list_remove_by_condition(lista_procesos, (void*)es_proceso_finalizado);
+		sem_post(&sem_lista_procesos);
+	}
+
+	//Libero memoria
+	free(archivo);
+	free(buffer_to_send->data);
+	free(buffer_to_send);
+}
+
+/* Hilo para procesar algunas operaciones que pueden
+ * generar demoras */
 void hilo_procesar_operacion(void* tipo_operacion){
 	printf("Inicio hilo_procesar_operacion \n");
 
@@ -258,6 +324,11 @@ void hilo_procesar_operacion(void* tipo_operacion){
 			break;
 		}
 
+		/* Agrego el PID del proceso creado a la lista */
+		sem_wait(&sem_lista_procesos);
+		list_add(lista_procesos, v_pid);
+		sem_post(&sem_lista_procesos);
+
 		//crear hilo de espera por mensajes proceso e imprimir por pantalla
 		pthread_attr_init(&th_iniciar_proceso_attr);
 		pthread_create(&th_iniciar_proceso_id, &th_iniciar_proceso_attr, &hilo_escritor_interfaz_usuario, v_pid);
@@ -267,21 +338,7 @@ void hilo_procesar_operacion(void* tipo_operacion){
 		int local_pid = pid_proceso;
 		sem_post(&sem_pid_proceso);
 
-		t_programa_ansisop* archivo = malloc(sizeof(t_programa_ansisop));
-		archivo->pid = local_pid;
-		int size_mensaje = calcular_tamanio_mensaje(archivo, MSJ_FINALIZAR_PROGRAMA);
-
-		t_buffer* buffer_to_send = serializar_mensajes(archivo, MSJ_FINALIZAR_PROGRAMA, size_mensaje, server_socket.socket);
-
-		/* Enviar el pid al Kernel, para que lo finalize */
-		if(enviar_mensaje(buffer_to_send) == 1){
-			perror("Fallo envio del archivo al Kernel\n");
-		}
-
-		//Libero memoria
-		free(archivo);
-		free(buffer_to_send->data);
-		free(buffer_to_send);
+		finalizar_proceso(local_pid);
 
 		break;
 	default:
@@ -294,9 +351,11 @@ void clean_destroy_close(){
 	disconnect_kernel();
 	sem_destroy(&sem_path_archivo);
 	sem_destroy(&sem_pid_proceso);
+	sem_destroy(&sem_lista_procesos);
 	sem_destroy(&sem_tipo_operacion);
 	sem_destroy(&sem_hay_instruccion);
 	free(path_archivo_a_enviar);
+	list_destroy(lista_procesos);
 	printf("Fin hilo_lector_interfaz_usuario \n");
 	printf("Fin hilo_manager_programa \n");
 	printf("Fin MAIN \n");

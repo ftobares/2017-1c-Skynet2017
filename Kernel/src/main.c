@@ -94,10 +94,10 @@ int main(int argc, char** argv) {
 	return v_valor_retorno;
 }
 
-void enviar_respuesta_handshake(int socket, char* buffer) {
+void enviar_respuesta_handshake(int socket, char* mensaje) {
 	t_handshake temp_handshake;
 	temp_handshake.handshake = string_new();
-	string_append(&temp_handshake.handshake, buffer);
+	string_append(&temp_handshake.handshake, mensaje);
 	int size_mensaje = calcular_tamanio_mensaje(&temp_handshake.handshake, MSJ_HANDSHAKE);
 
 	printf("Mensaje a serializar %s\n", temp_handshake.handshake);
@@ -109,6 +109,48 @@ void enviar_respuesta_handshake(int socket, char* buffer) {
 
 	//destroy buffer
 	free(temp_handshake.handshake);
+	free(buffer_to_send->data);
+	free(buffer_to_send);
+}
+
+void procesar_handshake(const t_buffer* buffer, int sd) {
+	t_handshake* v_handshake = deserializar_mensaje(buffer->data,
+			buffer->header.id_tipo);
+	if (string_contains(v_handshake->handshake, HANDSHAKE_CPU)) {
+		puts("HANDSHAKE CON LA CPU\n");
+		enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
+	} else if (string_contains(v_handshake->handshake, HANDSHAKE_CONSOLA)) {
+		puts("HANDSHAKE CON LA CONSOLA\n");
+		enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
+	} else {
+		puts("NEGACION\n");
+		enviar_respuesta_handshake(sd, MSJ_NEGACION);
+	}
+
+	free(v_handshake);
+}
+
+void crear_proceso_y_enviar_pid(int sd) {
+	/* Aca se supone que leo el codigo que me enviaron y creo el proceso*/
+	//Deserializo mensaje buffer.data
+	//creo el proceso
+	t_programa_ansisop* programa_ansisop = malloc(sizeof(t_programa_ansisop));
+	/* Inicio simulacion de valor random para el PID a devolver */
+	srand(time(NULL));
+	int pid_random = rand();
+	programa_ansisop->pid = pid_random;
+	programa_ansisop->contenido = string_new();
+	/* Fin simulacion */
+	int size_mensaje = calcular_tamanio_mensaje(programa_ansisop,
+			MSJ_PROGRAMA_ANSISOP);
+	t_buffer* buffer_to_send = serializar_mensajes(programa_ansisop,
+			MSJ_PROGRAMA_ANSISOP, size_mensaje, sd);
+	if (enviar_mensaje(buffer_to_send) == 1) {
+		perror("Fallo el envio del PID a la Consola\n");
+	}
+
+	free(programa_ansisop->contenido);
+	free(programa_ansisop);
 	free(buffer_to_send->data);
 	free(buffer_to_send);
 }
@@ -133,14 +175,12 @@ void enviar_respuesta_handshake(int socket, char* buffer) {
 int iniciar_servidor() {
 	int opt = TRUE;
 	int addrlen, new_socket, cliente_socket[CantClientes], max_clientes =
-	CantClientes, actividad, i, /*valorLectura,*/ sd /*, read_size*/;
+	CantClientes, actividad, i, sd;
 	t_buffer buffer;
 	int max_sd;
 
 	fd_set readfds;
 
-	//char mensaje[PACKAGESIZE];
-	//char tipo_mensaje;
 	//Conectarse a la Memoria
 	socket_memoria = conectar_a_otro_servidor(config->ipMemoria,
 			config->puertoMemoria);
@@ -148,21 +188,26 @@ int iniciar_servidor() {
 	//Conectarse al FileSystem
 	socket_fs = conectar_a_otro_servidor(config->ipFileSystem,
 			config->puertoFileSystem);
+
 	//inicializar todos los cliente_socket[] a 0 (No chequeado)
 	for (i = 0; i < max_clientes; i++) {
 		cliente_socket[i] = 0;
 	}
+
 	master_socket = servidor_crear_socket_bind_and_listen(config->puertoProg,
 			opt, max_clientes);
 
 	addrlen = sizeof(master_socket.socket_info);
 	puts("Esperando por conexiones entrantes...");
 	while (TRUE) {
+
 		//Limpiar el socket set
 		FD_ZERO(&readfds);
+
 		//Agregar el socket maestro al set
 		FD_SET(master_socket.socket, &readfds);
 		max_sd = master_socket.socket;
+
 		//Agregar sockets hijos al set
 		for (i = 0; i < max_clientes; i++) {
 			//socket descriptor
@@ -174,11 +219,13 @@ int iniciar_servidor() {
 			if (sd > max_sd)
 				max_sd = sd;
 		}
+
 		//espera por una actividad de uno de los sockets, el timeout es NULL (Se espera indefinidamente)
 		actividad = select(max_sd + 1, &readfds, NULL, NULL, NULL);
 		if (actividad < 0) {
 			printf("select error");
 		}
+
 		//Si pasa algo en el socket maestro, entonces es una conexion entrante
 		if (FD_ISSET(master_socket.socket, &readfds)) {
 			if ((new_socket = accept(master_socket.socket,
@@ -187,11 +234,12 @@ int iniciar_servidor() {
 				perror("accept");
 				exit(EXIT_FAILURE);
 			}
+
 			//informar usuario de numero de socket
-			printf(
-					"Nueva conexion, socket fd es %d , ip es : %s , puerto : %d \n",
+			printf("Nueva conexion, socket fd es %d , ip es : %s , puerto : %d \n",
 					new_socket, inet_ntoa(master_socket.socket_info.sin_addr),
 					ntohs(master_socket.socket_info.sin_port));
+
 			//Agregar new socket al array de sockets
 			for (i = 0; i < max_clientes; i++) {
 				//Si la posicion es vacia
@@ -224,54 +272,16 @@ int iniciar_servidor() {
 					cliente_socket[i] = 0;
 				} else if (buffer.header.tamanio > 0) {
 					int j;
-//					mensaje[valorLectura] = '\0';
-//					tipo_mensaje = mensaje[0];
-					//printf("MENSAJE: %s\n", mensaje);
+
 					switch (buffer.header.id_tipo) {
 					case MSJ_HANDSHAKE:
 						printf("Ingreso mensaje handshake\n");
-						t_handshake* v_handshake = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
-						if(string_contains(v_handshake->handshake,HANDSHAKE_CPU)){
-							puts("HANDSHAKE CON LA CPU\n");
-							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
-						}else if(string_contains(v_handshake->handshake,HANDSHAKE_CONSOLA)){
-							puts("HANDSHAKE CON LA CONSOLA\n");
-							enviar_respuesta_handshake(sd, MSJ_CONFIRMACION);
-						}else{
-							puts("NEGACION\n");
-							enviar_respuesta_handshake(sd, MSJ_NEGACION);
-						}
-						free(v_handshake);
+						procesar_handshake(&buffer, sd);
 						break;
 					case MSJ_PROGRAMA_ANSISOP:
 						printf("Ingreso mensaje programa AnsiSOp\n",buffer.header.id_tipo);
-						/* Aca se supone que leo el codigo que me enviaron y creo el proceso*/
-						//Deserializo mensaje buffer.data
-						//creo el proceso
-
-						t_programa_ansisop programa_ansisop;
-
-						/* Inicio simulacion de valor random para el PID a devolver */
-						srand(time(NULL));
-						int pid_random = rand();
-						programa_ansisop.pid = pid_random;
-						programa_ansisop.contenido = string_new();
-						/* Fin simulacion */
-
-						int size_mensaje = calcular_tamanio_mensaje(&programa_ansisop, MSJ_PROGRAMA_ANSISOP);
-
-						t_buffer* buffer_to_send = serializar_mensajes(&programa_ansisop, MSJ_PROGRAMA_ANSISOP, size_mensaje, sd);
-
-						if(enviar_mensaje(buffer_to_send) == 1){
-							perror("Fallo el envio del PID a la Consola\n");
-						}
-
-						free(programa_ansisop.contenido);
-						free(buffer_to_send->data);
-						free(buffer_to_send);
-
-					break;
-
+						crear_proceso_y_enviar_pid(sd);
+						break;
 					case MSJ_FINALIZAR_PROGRAMA:
 						printf("Ingreso mensaje finalizar programa AnsiSOp\n",buffer.header.id_tipo);
 						t_programa_ansisop* programa_finalizar = deserializar_mensaje(buffer.data, buffer.header.id_tipo);
@@ -284,29 +294,30 @@ int iniciar_servidor() {
 
 					default:
 						/* send to everyone! */
-//						for (j = 0; j <= max_sd; j++) {
-//							// except the listener and ourselves
-//							if (cliente_socket[j] != sd
-//									&& cliente_socket[j] != 0) {
-//								if (send(cliente_socket[j], mensaje,
-//										strlen(mensaje), 0) == -1) {
-//									perror("send() error!");
-//								} else {
-//									printf(
-//											"Mensaje enviado con el socket %d \n",
-//											cliente_socket[j]);
-//								}
-//							}
-//						}
-//						if (send(socket_memoria.socket, mensaje,
-//								strlen(mensaje), 0) != strlen(mensaje)) {
-//							perror("send memoria failed");
-//						}
-//						if (send(socket_fs.socket, mensaje, strlen(mensaje), 0)
-//								!= strlen(mensaje)) {
-//							perror("send filesystem failed");
-//						}
-						printf("valor lectura: %d\n", buffer.header.id_tipo);
+						for (j = 0; j <= max_sd; j++) {
+							// except the listener and ourselves
+							if (cliente_socket[j] != sd
+									&& cliente_socket[j] != 0) {
+								if (send(cliente_socket[j], buffer.data,
+										buffer.header.tamanio, 0) == -1) {
+									perror("send() error!");
+								} else {
+									printf(
+											"Mensaje enviado con el socket %d \n",
+											cliente_socket[j]);
+								}
+							}
+						}
+						int size_mensaje = sizeof(t_header)+buffer.header.tamanio;
+						if (send(socket_memoria.socket, buffer.data,
+								size_mensaje, 0) != size_mensaje) {
+							perror("send memoria failed");
+						}
+						if (send(socket_fs.socket, buffer.data, size_mensaje, 0)
+								!= size_mensaje) {
+							perror("send filesystem failed");
+						}
+						printf("Bytes enviados: %i\n", size_mensaje);
 						puts(
 								"mensajes a memoria y filesystem enviados correctamente\n");
 						break;
